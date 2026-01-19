@@ -17,6 +17,8 @@
 
 在线DEMO：https://pipipi-pikachu.github.io/pptxtojson/
 
+> 国内镜像（定期同步）：[Gitee](https://gitee.com/pptist/pptxtojson)、[GitCode](https://gitcode.com/pipipi-pikachu/pptxtojson)
+
 # 🎯 注意事项
 ### ⚒️ 使用场景
 本仓库诞生于项目 [PPTist](https://github.com/pipipi-pikachu/PPTist) ，希望为其“导入 .pptx 文件功能”提供一个参考示例。不过就目前来说，解析出来的PPT信息与源文件在样式上还是存在差异。
