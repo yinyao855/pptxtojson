@@ -31,7 +31,7 @@ export function getSchemeColorFromTheme(schemeClr, warpObj, clrMap, phClr) {
       }
     }
     else {
-      switch (schemeClr) {
+      switch (schmClrName) {
         case 'tx1':
           schemeClr = 'a:dk1'
           break

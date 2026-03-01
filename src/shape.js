@@ -59,9 +59,9 @@ export function getCustomShapePath(custShapType, w, h) {
       if (moveToPtNode) {
         Object.keys(moveToPtNode).forEach(key => {
           const moveToNoPt = moveToPtNode[key]
-          const spX = moveToNoPt['attrs', 'x']
-          const spY = moveToNoPt['attrs', 'y']
-          const order = moveToNoPt['attrs', 'order']
+          const spX = moveToNoPt['x']
+          const spY = moveToNoPt['y']
+          const order = moveToNoPt['order']
           multiSapeAry.push({
             type: 'movto',
             x: spX,
@@ -78,9 +78,9 @@ export function getCustomShapePath(custShapType, w, h) {
         if (lnToPtNode) {
           Object.keys(lnToPtNode).forEach(key => {
             const lnToNoPt = lnToPtNode[key]
-            const ptX = lnToNoPt['attrs', 'x']
-            const ptY = lnToNoPt['attrs', 'y']
-            const order = lnToNoPt['attrs', 'order']
+            const ptX = lnToNoPt['x']
+            const ptY = lnToNoPt['y']
+            const order = lnToNoPt['order']
             multiSapeAry.push({
               type: 'lnto',
               x: ptX,

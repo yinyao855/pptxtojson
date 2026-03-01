@@ -598,13 +598,13 @@ export async function getSlideBackgroundFill(warpObj) {
   }
 }
 
-export async function getShapeFill(node, pNode, isSvgMode, warpObj, source, groupHierarchy = []) {
+export async function getShapeFill(node, warpObj, source, groupHierarchy = []) {
   const fillType = getFillType(getTextByPathList(node, ['p:spPr']))
   let type = 'color'
   let fillValue = ''
   if (fillType === 'NO_FILL') {
-    return isSvgMode ? 'none' : ''
-  } 
+    return null
+  }
   else if (fillType === 'SOLID_FILL') {
     const shpFill = node['p:spPr']['a:solidFill']
     fillValue = getSolidFill(shpFill, undefined, undefined, warpObj)
@@ -638,8 +638,8 @@ export async function getShapeFill(node, pNode, isSvgMode, warpObj, source, grou
     fillValue = getSolidFill(clrName, undefined, undefined, warpObj)
     type = 'color'
   }
-  if (!fillValue && pNode && fillType === 'NO_FILL') {
-    return isSvgMode ? 'none' : ''
+  if (!fillValue) {
+    return null
   }
 
   return {

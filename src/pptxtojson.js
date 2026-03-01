@@ -323,7 +323,7 @@ async function processSingleSlide(zip, sldFileName, themeContent, defaultTextSty
   for (const nodeKey in nodes) {
     if (nodes[nodeKey].constructor !== Array) nodes[nodeKey] = [nodes[nodeKey]]
     for (const node of nodes[nodeKey]) {
-      const ret = await processNodesInSlide(nodeKey, node, nodes, warpObj, 'slide')
+      const ret = await processNodesInSlide(nodeKey, node, warpObj, 'slide')
       if (ret) elements.push(ret)
     }
   }
@@ -350,13 +350,75 @@ function getNote(noteContent) {
 
   if (spNodes.constructor !== Array) spNodes = [spNodes]
   for (const spNode of spNodes) {
-    let rNodes = getTextByPathList(spNode, ['p:txBody', 'a:p', 'a:r'])
-    if (!rNodes) continue
+    const phType = getTextByPathList(spNode, ['p:nvSpPr', 'p:nvPr', 'p:ph', 'attrs', 'type'])
+    if (phType !== 'body') continue
 
-    if (rNodes.constructor !== Array) rNodes = [rNodes]
-    for (const rNode of rNodes) {
-      const t = getTextByPathList(rNode, ['a:t'])
-      if (t && typeof t === 'string') text += t
+    const textBody = getTextByPathList(spNode, ['p:txBody'])
+    if (!textBody) continue
+
+    let pNode = textBody['a:p']
+    if (!pNode) continue
+    if (pNode.constructor !== Array) pNode = [pNode]
+
+    const listTypes = []
+
+    for (const p of pNode) {
+      const pPr = p['a:pPr']
+      const algn = getTextByPathList(pPr, ['attrs', 'algn'])
+      let align = 'left'
+      if (algn) {
+        switch (algn) {
+          case 'r': align = 'right'; break
+          case 'ctr': align = 'center'; break
+          case 'just': case 'dist': align = 'justify'; break
+          default: break
+        }
+      }
+
+      let listType = ''
+      if (pPr) {
+        if (pPr['a:buChar']) listType = 'ul'
+        else if (pPr['a:buAutoNum']) listType = 'ol'
+      }
+      const lvlNode = getTextByPathList(pPr, ['attrs', 'lvl'])
+      const listLevel = lvlNode !== undefined ? parseInt(lvlNode) : 0
+
+      if (listType) {
+        while (listTypes.length > listLevel + 1) {
+          text += `</${listTypes.pop()}>`
+        }
+        if (listTypes[listLevel] === undefined) {
+          text += `<${listType}>`
+          listTypes[listLevel] = listType
+        }
+        else if (listTypes[listLevel] !== listType) {
+          text += `</${listTypes[listLevel]}>`
+          text += `<${listType}>`
+          listTypes[listLevel] = listType
+        }
+        text += `<li style="text-align:${align};">`
+      }
+      else {
+        while (listTypes.length > 0) {
+          text += `</${listTypes.pop()}>`
+        }
+        text += `<p style="text-align:${align};">`
+      }
+
+      let rNodes = p['a:r']
+      if (rNodes) {
+        if (rNodes.constructor !== Array) rNodes = [rNodes]
+        for (const r of rNodes) {
+          const t = getTextByPathList(r, ['a:t'])
+          if (t && typeof t === 'string') text += t
+        }
+      }
+
+      if (listType) text += '</li>'
+      else text += '</p>'
+    }
+    while (listTypes.length > 0) {
+      text += `</${listTypes.pop()}>`
     }
   }
   return text
@@ -376,7 +438,7 @@ async function getLayoutElements(warpObj) {
         for (let i = 0; i < nodesSldLayout[nodeKey].length; i++) {
           const ph = getTextByPathList(nodesSldLayout[nodeKey][i], ['p:nvSpPr', 'p:nvPr', 'p:ph'])
           if (!ph) {
-            const ret = await processNodesInSlide(nodeKey, nodesSldLayout[nodeKey][i], nodesSldLayout, warpObj, 'slideLayoutBg')
+            const ret = await processNodesInSlide(nodeKey, nodesSldLayout[nodeKey][i], warpObj, 'slideLayoutBg')
             if (ret) elements.push(ret)
           }
         }
@@ -384,7 +446,7 @@ async function getLayoutElements(warpObj) {
       else {
         const ph = getTextByPathList(nodesSldLayout[nodeKey], ['p:nvSpPr', 'p:nvPr', 'p:ph'])
         if (!ph) {
-          const ret = await processNodesInSlide(nodeKey, nodesSldLayout[nodeKey], nodesSldLayout, warpObj, 'slideLayoutBg')
+          const ret = await processNodesInSlide(nodeKey, nodesSldLayout[nodeKey], warpObj, 'slideLayoutBg')
           if (ret) elements.push(ret)
         }
       }
@@ -396,7 +458,7 @@ async function getLayoutElements(warpObj) {
         for (let i = 0; i < nodesSldMaster[nodeKey].length; i++) {
           const ph = getTextByPathList(nodesSldMaster[nodeKey][i], ['p:nvSpPr', 'p:nvPr', 'p:ph'])
           if (!ph) {
-            const ret = await processNodesInSlide(nodeKey, nodesSldMaster[nodeKey][i], nodesSldMaster, warpObj, 'slideMasterBg')
+            const ret = await processNodesInSlide(nodeKey, nodesSldMaster[nodeKey][i], warpObj, 'slideMasterBg')
             if (ret) elements.push(ret)
           }
         }
@@ -404,7 +466,7 @@ async function getLayoutElements(warpObj) {
       else {
         const ph = getTextByPathList(nodesSldMaster[nodeKey], ['p:nvSpPr', 'p:nvPr', 'p:ph'])
         if (!ph) {
-          const ret = await processNodesInSlide(nodeKey, nodesSldMaster[nodeKey], nodesSldMaster, warpObj, 'slideMasterBg')
+          const ret = await processNodesInSlide(nodeKey, nodesSldMaster[nodeKey], warpObj, 'slideMasterBg')
           if (ret) elements.push(ret)
         }
       }
@@ -452,15 +514,15 @@ function indexNodes(content) {
   return { idTable, idxTable, typeTable }
 }
 
-async function processNodesInSlide(nodeKey, nodeValue, nodes, warpObj, source, groupHierarchy = []) {
+async function processNodesInSlide(nodeKey, nodeValue, warpObj, source, groupHierarchy = []) {
   let json
 
   switch (nodeKey) {
     case 'p:sp': // Shape, Text
-      json = await processSpNode(nodeValue, nodes, warpObj, source, groupHierarchy)
+      json = await processSpNode(nodeValue, warpObj, source, groupHierarchy)
       break
     case 'p:cxnSp': // Shape, Text
-      json = await processCxnSpNode(nodeValue, nodes, warpObj, source)
+      json = await processCxnSpNode(nodeValue, warpObj, source)
       break
     case 'p:pic': // Image, Video, Audio
       json = await processPicNode(nodeValue, warpObj, source)
@@ -550,12 +612,12 @@ async function processGroupSpNode(node, warpObj, source, parentGroupHierarchy = 
   for (const nodeKey in node) {
     if (node[nodeKey].constructor === Array) {
       for (const item of node[nodeKey]) {
-        const ret = await processNodesInSlide(nodeKey, item, node, warpObj, source, currentGroupHierarchy)
+        const ret = await processNodesInSlide(nodeKey, item, warpObj, source, currentGroupHierarchy)
         if (ret) elements.push(ret)
       }
     }
     else {
-      const ret = await processNodesInSlide(nodeKey, node[nodeKey], node, warpObj, source, currentGroupHierarchy)
+      const ret = await processNodesInSlide(nodeKey, node[nodeKey], warpObj, source, currentGroupHierarchy)
       if (ret) elements.push(ret)
     }
   }
@@ -601,7 +663,7 @@ async function processGroupSpNode(node, warpObj, source, parentGroupHierarchy = 
   }
 }
 
-async function processSpNode(node, pNode, warpObj, source, groupHierarchy = []) {
+async function processSpNode(node, warpObj, source, groupHierarchy = []) {
   const name = getTextByPathList(node, ['p:nvSpPr', 'p:cNvPr', 'attrs', 'name'])
   const idx = getTextByPathList(node, ['p:nvSpPr', 'p:nvPr', 'p:ph', 'attrs', 'idx'])
   let type = getTextByPathList(node, ['p:nvSpPr', 'p:nvPr', 'p:ph', 'attrs', 'type'])
@@ -611,9 +673,11 @@ async function processSpNode(node, pNode, warpObj, source, groupHierarchy = []) 
 
   if (type) {
     if (idx) {
-      slideLayoutSpNode = warpObj['slideLayoutTables']['typeTable'][type]
-      slideMasterSpNode = warpObj['slideMasterTables']['typeTable'][type]
-    } 
+      slideLayoutSpNode = warpObj['slideLayoutTables']['idxTable'][idx]
+      slideMasterSpNode = warpObj['slideMasterTables']['idxTable'][idx]
+      if (!slideLayoutSpNode) slideLayoutSpNode = warpObj['slideLayoutTables']['typeTable'][type]
+      if (!slideMasterSpNode) slideMasterSpNode = warpObj['slideMasterTables']['typeTable'][type]
+    }
     else {
       slideLayoutSpNode = warpObj['slideLayoutTables']['typeTable'][type]
       slideMasterSpNode = warpObj['slideMasterTables']['typeTable'][type]
@@ -636,18 +700,18 @@ async function processSpNode(node, pNode, warpObj, source, groupHierarchy = []) 
     else type = 'obj'
   }
 
-  return await genShape(node, pNode, slideLayoutSpNode, slideMasterSpNode, name, type, order, warpObj, source, groupHierarchy)
+  return await genShape(node, slideLayoutSpNode, slideMasterSpNode, name, type, order, warpObj, source, groupHierarchy)
 }
 
-async function processCxnSpNode(node, pNode, warpObj, source) {
+async function processCxnSpNode(node, warpObj, source) {
   const name = node['p:nvCxnSpPr']['p:cNvPr']['attrs']['name']
   const type = (node['p:nvCxnSpPr']['p:nvPr']['p:ph'] === undefined) ? undefined : node['p:nvSpPr']['p:nvPr']['p:ph']['attrs']['type']
   const order = node['attrs']['order']
 
-  return await genShape(node, pNode, undefined, undefined, name, type, order, warpObj, source)
+  return await genShape(node, undefined, undefined, name, type, order, warpObj, source)
 }
 
-async function genShape(node, pNode, slideLayoutSpNode, slideMasterSpNode, name, type, order, warpObj, source, groupHierarchy = []) {
+async function genShape(node, slideLayoutSpNode, slideMasterSpNode, name, type, order, warpObj, source, groupHierarchy = []) {
   const xfrmList = ['p:spPr', 'a:xfrm']
   const slideXfrmNode = getTextByPathList(node, xfrmList)
   const slideLayoutXfrmNode = getTextByPathList(slideLayoutSpNode, xfrmList)
@@ -691,7 +755,7 @@ async function genShape(node, pNode, slideLayoutSpNode, slideMasterSpNode, name,
   if (node['p:txBody']) content = genTextBody(node['p:txBody'], node, slideLayoutSpNode, slideMasterSpNode, type, warpObj)
 
   const { borderColor, borderWidth, borderType, strokeDasharray } = getBorder(node, type, warpObj)
-  const fill = await getShapeFill(node, pNode, undefined, warpObj, source, groupHierarchy) || ''
+  const fill = await getShapeFill(node, warpObj, source, groupHierarchy)
 
   let shadow
   const outerShdwNode = getTextByPathList(node, ['p:spPr', 'a:effectLst', 'a:outerShdw'])
@@ -1196,7 +1260,7 @@ async function genDiagram(node, warpObj) {
     const spList = Array.isArray(dgmDrwSpArray) ? dgmDrwSpArray : [dgmDrwSpArray]
 
     for (const item of spList) {
-      const el = await processSpNode(item, node, warpObj, 'diagramBg')
+      const el = await processSpNode(item, warpObj, 'diagramBg')
       if (el) elements.push(el)
     }
   }
