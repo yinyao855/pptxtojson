@@ -136,8 +136,11 @@ async function processSingleSlide(zip, sldFileName, themeContent, defaultTextSty
   for (const relationshipArrayItem of relationshipArray) {
     const relType = relationshipArrayItem['attrs']['Type'].replace('http://schemas.openxmlformats.org/officeDocument/2006/relationships/', '')
     let relTarget = relationshipArrayItem['attrs']['Target']
-    if (relTarget.indexOf('../') !== -1) relTarget = relTarget.replace('../', 'ppt/')
-    else relTarget = 'ppt/slides/' + relTarget
+    const isExternal = relationshipArrayItem['attrs']['TargetMode'] === 'External'
+    if (!isExternal) {
+      if (relTarget.indexOf('../') !== -1) relTarget = relTarget.replace('../', 'ppt/')
+      else relTarget = 'ppt/slides/' + relTarget
+    }
 
     switch (relationshipArrayItem['attrs']['Type']) {
       case 'http://schemas.openxmlformats.org/officeDocument/2006/relationships/slideLayout':
@@ -341,6 +344,24 @@ async function processSingleSlide(zip, sldFileName, themeContent, defaultTextSty
     note,
     transition,
   }
+}
+
+function getHyperlinkFromCNvPr(cNvPr, warpObj) {
+  const hlinkClick = getTextByPathList(cNvPr, ['a:hlinkClick', 'attrs'])
+  if (!hlinkClick) return null
+
+  const linkId = hlinkClick['r:id']
+  if (!linkId) return null
+
+  const res = warpObj['slideResObj'][linkId]
+  if (!res) return null
+
+  if (res['type'] !== 'hyperlink') return null
+
+  const target = res['target']
+  if (!target || !/^https?:\/\//.test(target)) return null
+
+  return target
 }
 
 function getNote(noteContent) {
@@ -664,7 +685,8 @@ async function processGroupSpNode(node, warpObj, source, parentGroupHierarchy = 
 }
 
 async function processSpNode(node, warpObj, source, groupHierarchy = []) {
-  const name = getTextByPathList(node, ['p:nvSpPr', 'p:cNvPr', 'attrs', 'name'])
+  const cNvPr = getTextByPathList(node, ['p:nvSpPr', 'p:cNvPr'])
+  const name = getTextByPathList(cNvPr, ['attrs', 'name'])
   const idx = getTextByPathList(node, ['p:nvSpPr', 'p:nvPr', 'p:ph', 'attrs', 'idx'])
   let type = getTextByPathList(node, ['p:nvSpPr', 'p:nvPr', 'p:ph', 'attrs', 'type'])
   const order = getTextByPathList(node, ['attrs', 'order'])
@@ -700,18 +722,22 @@ async function processSpNode(node, warpObj, source, groupHierarchy = []) {
     else type = 'obj'
   }
 
-  return await genShape(node, slideLayoutSpNode, slideMasterSpNode, name, type, order, warpObj, source, groupHierarchy)
+  const link = getHyperlinkFromCNvPr(cNvPr, warpObj)
+
+  return await genShape(node, slideLayoutSpNode, slideMasterSpNode, name, type, order, warpObj, source, link, groupHierarchy)
 }
 
 async function processCxnSpNode(node, warpObj, source) {
-  const name = node['p:nvCxnSpPr']['p:cNvPr']['attrs']['name']
-  const type = (node['p:nvCxnSpPr']['p:nvPr']['p:ph'] === undefined) ? undefined : node['p:nvSpPr']['p:nvPr']['p:ph']['attrs']['type']
+  const cNvPr = getTextByPathList(node, ['p:nvCxnSpPr', 'p:cNvPr'])
+  const name = getTextByPathList(cNvPr, ['attrs', 'name'])
+  const type = (node['p:nvCxnSpPr']['p:nvPr']['p:ph'] === undefined) ? undefined : node['p:nvCxnSpPr']['p:nvPr']['p:ph']['attrs']['type']
   const order = node['attrs']['order']
+  const link = getHyperlinkFromCNvPr(cNvPr, warpObj)
 
-  return await genShape(node, undefined, undefined, name, type, order, warpObj, source)
+  return await genShape(node, undefined, undefined, name, type, order, warpObj, source, link)
 }
 
-async function genShape(node, slideLayoutSpNode, slideMasterSpNode, name, type, order, warpObj, source, groupHierarchy = []) {
+async function genShape(node, slideLayoutSpNode, slideMasterSpNode, name, type, order, warpObj, source, link, groupHierarchy = []) {
   const xfrmList = ['p:spPr', 'a:xfrm']
   const slideXfrmNode = getTextByPathList(node, xfrmList)
   const slideLayoutXfrmNode = getTextByPathList(slideLayoutSpNode, xfrmList)
@@ -786,6 +812,7 @@ async function genShape(node, slideLayoutSpNode, slideMasterSpNode, name, type, 
 
   if (shadow) data.shadow = shadow
   if (autoFit) data.autoFit = autoFit
+  if (link) data.link = link
 
   const isHasValidText = data.content && hasValidText(data.content)
 
@@ -841,6 +868,8 @@ async function processPicNode(node, warpObj, source) {
   else if (source === 'slideLayoutBg') resObj = warpObj['layoutResObj']
   else resObj = warpObj['slideResObj']
 
+  const cNvPr = getTextByPathList(node, ['p:nvPicPr', 'p:cNvPr'])
+  const link = getHyperlinkFromCNvPr(cNvPr, warpObj)
   const order = node['attrs']['order']
   
   const rid = node['p:blipFill']['a:blip']['attrs']['r:embed']
@@ -984,6 +1013,7 @@ async function processPicNode(node, warpObj, source) {
   }
 
   if (filters) imageData.filters = filters
+  if (link) imageData.link = link
 
   return imageData
 }

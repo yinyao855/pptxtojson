@@ -168,6 +168,7 @@ func()
 					- `shape`：文本框高度会根据文本内容自动调整
 					- `text`：文本框大小固定，字号会自动缩放以适应文本框（注：autoFit不存在时，也会固定文本框大小，但字号不会缩放）
 				- 字体缩放比例（type='text'专有，默认为1） `fontScale`
+			- 超链接 `link`
 
 		- 图片
 			- 类型 `type='image'`
@@ -184,6 +185,7 @@ func()
 			- 图片地址（base64） `src`
 			- 旋转角度 `rotate`
 			- 滤镜 `filters`
+			- 超链接 `link`
 
 		- 形状
 			- 类型 `type='shape'`
@@ -207,6 +209,7 @@ func()
 			- 形状调整参数 `keypoints`
 			- 元素名 `name`
 			- 自动调整大小 `autoFit`
+			- 超链接 `link`
 
 		- 表格
 			- 类型 `type='table'`

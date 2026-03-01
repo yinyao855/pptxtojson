@@ -75,6 +75,7 @@ export interface Shape {
   name: string
   order: number
   autoFit?: AutoFit
+  link?: string
 }
 
 export interface Text {
@@ -98,6 +99,7 @@ export interface Text {
   name: string
   order: number
   autoFit?: AutoFit
+  link?: string
 }
 
 export interface Image {
@@ -129,6 +131,7 @@ export interface Image {
     brightness?: number
     contrast?: number
   }
+  link?: string
 }
 
 export interface TableCell {
