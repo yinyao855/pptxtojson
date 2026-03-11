@@ -1,19 +1,17 @@
 import { nodeResolve } from '@rollup/plugin-node-resolve'
 import commonjs from '@rollup/plugin-commonjs'
-import { babel } from '@rollup/plugin-babel'
-import eslint from '@rollup/plugin-eslint'
+import typescript from '@rollup/plugin-typescript'
 import terser from '@rollup/plugin-terser'
 import globals from 'rollup-plugin-node-globals'
 import builtins from 'rollup-plugin-node-builtins'
 
-const onwarn = warning => {
+const onwarn = (warning) => {
   if (warning.code === 'CIRCULAR_DEPENDENCY') return
-
-  console.warn(`(!) ${warning.message}`) // eslint-disable-line
+  console.warn(`(!) ${warning.message}`)
 }
 
 export default {
-  input: 'src/pptxtojson.js',
+  input: 'src/index.ts',
   onwarn,
   output: [
     {
@@ -34,17 +32,11 @@ export default {
     },
   ],
   plugins: [
-    nodeResolve({
-      preferBuiltins: false,
-    }),
+    nodeResolve({ preferBuiltins: false }),
     commonjs(),
-    eslint(),
-    babel({
-      babelHelpers: 'runtime',
-      exclude: ['node_modules/**'],
-    }),
+    typescript({ tsconfig: './tsconfig.json' }),
     terser(),
     globals(),
     builtins(),
-  ]
+  ],
 }

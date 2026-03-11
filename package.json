@@ -3,11 +3,12 @@
 	"version": "1.12.1",
 	"description": "A javascript tool for parsing .pptx file",
 	"type": "module",
-	"main": "./dist/index.umd.js",
+	"main": "./dist/index.cjs",
 	"module": "./dist/index.js",
 	"types": "./dist/index.d.ts",
 	"scripts": {
 		"clean:dist": "rimraf dist",
+		"build": "rm -rf dist && rollup -c && tsc --emitDeclarationOnly",
 		"dev": "rollup -c -w",
 		"lint": "eslint src --ext .js,.jsx,.ts,.tsx"
 	},
@@ -41,9 +42,12 @@
 		"@rollup/plugin-eslint": "^9.0.1",
 		"@rollup/plugin-node-resolve": "^15.0.1",
 		"@rollup/plugin-terser": "^0.1.0",
+		"@rollup/plugin-typescript": "^11.1.6",
 		"eslint": "^8.27.0",
 		"rollup": "^3.3.0",
 		"rollup-plugin-node-builtins": "^2.1.2",
-		"rollup-plugin-node-globals": "^1.4.0"
+		"rollup-plugin-node-globals": "^1.4.0",
+		"tslib": "^2.8.1",
+		"typescript": "^5.9.3"
 	}
 }
