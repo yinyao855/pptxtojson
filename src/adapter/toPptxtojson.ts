@@ -9,11 +9,11 @@ import type { SlideNode } from '../model/Slide';
 import type { ShapeNodeData } from '../model/nodes/ShapeNode';
 import type { PptxFiles } from '../parser/ZipParser';
 import type {
-  PptxtojsonOutput,
-  PptxtojsonSlide,
-  PptxtojsonElement,
-  PptxtojsonFill,
-  PptxtojsonSize,
+  Output,
+  Slide,
+  Element,
+  Fill,
+  Size,
 } from './types';
 import { createRenderContext } from '../resolve/RenderContext';
 import { resolveFill, resolveLineStyle, resolveThemeFillReference } from '../resolve/StyleResolver';
@@ -41,14 +41,14 @@ function getThemeColors(presentation: PresentationData): string[] {
   return themeColors;
 }
 
-function defaultSlideFill(): PptxtojsonFill {
+function defaultSlideFill(): Fill {
   return { type: 'color', value: '#ffffff' };
 }
 
 function resolveSlideFill(
   slide: SlideData,
   ctx: ReturnType<typeof createRenderContext>,
-): PptxtojsonFill {
+): Fill {
   const candidates: (SafeXmlNode | undefined)[] = [
     slide.background,
     ctx.layout.background,
@@ -107,7 +107,7 @@ function getNoteForSlide(slide: SlideData, files: PptxFiles): string | undefined
   return undefined;
 }
 
-function getTransitionForSlide(slide: SlideData, files: PptxFiles): PptxtojsonSlide['transition'] {
+function getTransitionForSlide(slide: SlideData, files: PptxFiles): Slide['transition'] {
   const slideXml = files.slides.get(slide.slidePath);
   if (!slideXml) return undefined;
   const root = parseXml(slideXml);
@@ -133,10 +133,10 @@ function getTransitionForSlide(slide: SlideData, files: PptxFiles): PptxtojsonSl
   return { type, duration, direction };
 }
 
-function cssToPptxtojsonFill(css: string): PptxtojsonFill | undefined {
+function cssToPptxtojsonFill(css: string): Fill | undefined {
   if (!css || css === 'transparent') return undefined;
   if (css.includes('gradient')) {
-    return { type: 'gradient', value: css } as PptxtojsonFill;
+    return { type: 'gradient', value: css } as Fill;
   }
   return { type: 'color', value: css };
 }
@@ -156,7 +156,7 @@ function nodeToElement(
   ctx: ReturnType<typeof createRenderContext>,
   order: number,
   files?: PptxFiles,
-): PptxtojsonElement {
+): Element {
   const left = pxToPt(node.position.x);
   const top = pxToPt(node.position.y);
   const width = pxToPt(node.size.w);
@@ -235,7 +235,7 @@ function nodeToElement(
       };
     }
     case 'group': {
-      const childElements: PptxtojsonElement[] = [];
+      const childElements: Element[] = [];
       const diagramDrawings = files?.diagramDrawings;
       for (let i = 0; i < node.children.length; i++) {
         const childNode = parseChildNode(
@@ -292,9 +292,9 @@ function slideToPptxtojsonSlide(
   presentation: PresentationData,
   slide: SlideData,
   files: PptxFiles,
-): PptxtojsonSlide {
+): Slide {
   const ctx = createRenderContext(presentation, slide);
-  const elements: PptxtojsonElement[] = slide.nodes.map((node, i) =>
+  const elements: Element[] = slide.nodes.map((node, i) =>
     nodeToElement(node, ctx, i, files),
   );
   return {
@@ -309,13 +309,13 @@ function slideToPptxtojsonSlide(
 export function toPptxtojsonFormat(
   presentation: PresentationData,
   files: PptxFiles,
-): PptxtojsonOutput {
-  const size: PptxtojsonSize = {
+): Output {
+  const size: Size = {
     width: pxToPt(presentation.width),
     height: pxToPt(presentation.height),
   };
   const themeColors = getThemeColors(presentation);
-  const slides: PptxtojsonSlide[] = presentation.slides.map((slide) =>
+  const slides: Slide[] = presentation.slides.map((slide) =>
     slideToPptxtojsonSlide(presentation, slide, files),
   );
   return {

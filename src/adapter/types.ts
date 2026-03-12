@@ -1,185 +1,330 @@
 /**
  * pptxtojson / PPTist 输出格式类型定义
- * 参考 README 与 src1 的字段结构；长度与坐标单位均为 pt。
+ * 长度与坐标单位均为 pt。
  */
 
-export interface PptxtojsonSize {
+export interface Size {
   width: number
   height: number
 }
 
-export interface PptxtojsonFillColor {
+export interface Shadow {
+  h: number
+  v: number
+  blur: number
+  color: string
+}
+
+export interface ColorFill {
   type: 'color'
   value: string
 }
 
-export interface PptxtojsonFillGradient {
-  type: 'gradient'
-  [key: string]: unknown
-}
-
-export interface PptxtojsonFillImage {
+export interface ImageFill {
   type: 'image'
-  [key: string]: unknown
+  value: {
+    picBase64: string
+    opacity: number
+  }
 }
 
-export interface PptxtojsonFillPattern {
+export interface GradientFill {
+  type: 'gradient'
+  value: {
+    path: 'line' | 'circle' | 'rect' | 'shape'
+    rot: number
+    colors: {
+      pos: string
+      color: string
+    }[]
+  }
+}
+
+export interface PatternFill {
   type: 'pattern'
-  [key: string]: unknown
+  value: {
+    type: string
+    foregroundColor: string
+    backgroundColor: string
+  }
 }
 
-export type PptxtojsonFill =
-  | PptxtojsonFillColor
-  | PptxtojsonFillGradient
-  | PptxtojsonFillImage
-  | PptxtojsonFillPattern
+export type Fill = ColorFill | ImageFill | GradientFill | PatternFill
 
-export interface PptxtojsonTransition {
+export interface Border {
+  borderColor: string
+  borderWidth: number
+  borderType: 'solid' | 'dashed' | 'dotted'
+}
+
+export interface AutoFit {
+  type: 'shape' | 'text'
+  fontScale?: number
+}
+
+export interface Shape {
+  type: 'shape'
+  left: number
+  top: number
+  width: number
+  height: number
+  borderColor: string
+  borderWidth: number
+  borderType: 'solid' | 'dashed' | 'dotted'
+  borderStrokeDasharray: string
+  shadow?: Shadow
+  fill: Fill
+  content: string
+  isFlipV: boolean
+  isFlipH: boolean
+  rotate: number
+  shapType: string
+  vAlign: string
+  path?: string
+  keypoints?: Record<string, number>
+  name: string
+  order: number
+  autoFit?: AutoFit
+  link?: string
+}
+
+export interface Text {
+  type: 'text'
+  left: number
+  top: number
+  width: number
+  height: number
+  borderColor: string
+  borderWidth: number
+  borderType: 'solid' | 'dashed' | 'dotted'
+  borderStrokeDasharray: string
+  shadow?: Shadow
+  fill: Fill
+  isFlipV: boolean
+  isFlipH: boolean
+  isVertical: boolean
+  rotate: number
+  content: string
+  vAlign: string
+  name: string
+  order: number
+  autoFit?: AutoFit
+  link?: string
+}
+
+export interface Image {
+  type: 'image'
+  left: number
+  top: number
+  width: number
+  height: number
+  src: string
+  rotate: number
+  isFlipH: boolean
+  isFlipV: boolean
+  order: number
+  rect?: {
+    t?: number
+    b?: number
+    l?: number
+    r?: number
+  }
+  geom: string
+  borderColor: string
+  borderWidth: number
+  borderType: 'solid' | 'dashed' | 'dotted'
+  borderStrokeDasharray: string
+  filters?: {
+    sharpen?: number
+    colorTemperature?: number
+    saturation?: number
+    brightness?: number
+    contrast?: number
+  }
+  link?: string
+}
+
+export interface TableCell {
+  text: string
+  rowSpan?: number
+  colSpan?: number
+  vMerge?: number
+  hMerge?: number
+  fillColor?: string
+  fontColor?: string
+  fontBold?: boolean
+  borders: {
+    top?: Border
+    bottom?: Border
+    left?: Border
+    right?: Border
+  }
+}
+
+export interface Table {
+  type: 'table'
+  left: number
+  top: number
+  width: number
+  height: number
+  data: TableCell[][]
+  borders: {
+    top?: Border
+    bottom?: Border
+    left?: Border
+    right?: Border
+  }
+  order: number
+  rowHeights: number[]
+  colWidths: number[]
+}
+
+export type ChartType = 'lineChart' |
+  'line3DChart' |
+  'barChart' |
+  'bar3DChart' |
+  'pieChart' |
+  'pie3DChart' |
+  'doughnutChart' |
+  'areaChart' |
+  'area3DChart' |
+  'scatterChart' |
+  'bubbleChart' |
+  'radarChart' |
+  'surfaceChart' |
+  'surface3DChart' |
+  'stockChart'
+
+export interface ChartValue {
+  x: string
+  y: number
+}
+
+export interface ChartXLabel {
+  [key: string]: string
+}
+
+export interface ChartItem {
+  key: string
+  values: ChartValue[]
+  xlabels: ChartXLabel
+}
+
+export type ScatterChartData = [number[], number[]]
+
+export interface CommonChart {
+  type: 'chart'
+  left: number
+  top: number
+  width: number
+  height: number
+  data: ChartItem[]
+  colors: string[]
+  chartType: Exclude<ChartType, 'scatterChart' | 'bubbleChart'>
+  barDir?: 'bar' | 'col'
+  marker?: boolean
+  holeSize?: string
+  grouping?: string
+  style?: string
+  order: number
+}
+
+export interface ScatterChart {
+  type: 'chart'
+  left: number
+  top: number
+  width: number
+  height: number
+  data: ScatterChartData
+  colors: string[]
+  chartType: 'scatterChart' | 'bubbleChart'
+  order: number
+}
+
+export type Chart = CommonChart | ScatterChart
+
+export interface Video {
+  type: 'video'
+  left: number
+  top: number
+  width: number
+  height: number
+  blob?: string
+  src?: string
+  order: number
+}
+
+export interface Audio {
+  type: 'audio'
+  left: number
+  top: number
+  width: number
+  height: number
+  blob: string
+  order: number
+}
+
+export interface Diagram {
+  type: 'diagram'
+  left: number
+  top: number
+  width: number
+  height: number
+  elements: (Shape | Text)[]
+  textList: string[]
+  order: number
+}
+
+export interface Math {
+  type: 'math'
+  left: number
+  top: number
+  width: number
+  height: number
+  latex: string
+  picBase64: string
+  order: number
+  text?: string
+}
+
+export type BaseElement = Shape | Text | Image | Table | Chart | Video | Audio | Diagram | Math
+
+export interface Group {
+  type: 'group'
+  left: number
+  top: number
+  width: number
+  height: number
+  rotate: number
+  elements: BaseElement[]
+  order: number
+  isFlipH: boolean
+  isFlipV: boolean
+}
+
+export type Element = BaseElement | Group
+
+export interface SlideTransition {
   type: string
   duration: number
   direction: string | null
 }
 
-export interface PptxtojsonElementBase {
-  left: number
-  top: number
-  width: number
-  height: number
-  name?: string
-  order?: number
+export interface Slide {
+  fill: Fill
+  elements: Element[]
+  layoutElements: Element[]
+  note: string
+  transition?: SlideTransition | null
 }
 
-export interface PptxtojsonTextElement extends PptxtojsonElementBase {
-  type: 'text'
-  content: string
-  fill?: PptxtojsonFill
-  borderColor?: string
-  borderWidth?: number
-  borderType?: string
-  borderStrokeDasharray?: string | number
-  shadow?: unknown
-  isFlipV?: boolean
-  isFlipH?: boolean
-  rotate?: number
-  vAlign?: string
-  isVertical?: boolean
-  autoFit?: unknown
-  link?: string
+export interface Options {
+  slideFactor?: number
+  fontsizeFactor?: number
 }
 
-export interface PptxtojsonShapeElement extends PptxtojsonElementBase {
-  type: 'shape'
-  shapType: string
-  path?: string
-  keypoints?: Record<string, number>
-  content?: string
-  fill?: PptxtojsonFill
-  borderColor?: string
-  borderWidth?: number
-  borderType?: string
-  borderStrokeDasharray?: string | number
-  shadow?: unknown
-  isFlipV?: boolean
-  isFlipH?: boolean
-  rotate?: number
-  vAlign?: string
-  autoFit?: unknown
-  link?: string
-}
-
-export interface PptxtojsonImageElement extends PptxtojsonElementBase {
-  type: 'image'
-  src: string
-  rect?: { t?: number; b?: number; l?: number; r?: number }
-  geom?: string
-  borderColor?: string
-  borderWidth?: number
-  borderType?: string
-  borderStrokeDasharray?: string | number
-  rotate?: number
-  isFlipV?: boolean
-  isFlipH?: boolean
-  filters?: unknown
-  link?: string
-}
-
-export interface PptxtojsonVideoElement extends PptxtojsonElementBase {
-  type: 'video'
-  src?: string
-  blob?: string
-  rotate?: number
-}
-
-export interface PptxtojsonAudioElement extends PptxtojsonElementBase {
-  type: 'audio'
-  blob?: string
-  rotate?: number
-}
-
-export interface PptxtojsonTableElement extends PptxtojsonElementBase {
-  type: 'table'
-  data: Array<Array<Record<string, unknown>>>
-  rowHeights: number[]
-  colWidths: number[]
-  borders?: unknown
-}
-
-export interface PptxtojsonChartElement extends PptxtojsonElementBase {
-  type: 'chart'
-  data: unknown
-  colors?: string[]
-  chartType?: string
-  barDir?: string
-  marker?: boolean
-  holeSize?: number
-  grouping?: string
-  style?: unknown
-}
-
-export interface PptxtojsonDiagramElement extends PptxtojsonElementBase {
-  type: 'diagram'
-  elements?: PptxtojsonElement[]
-  textList?: string[]
-}
-
-export interface PptxtojsonGroupElement extends PptxtojsonElementBase {
-  type: 'group'
-  elements: PptxtojsonElement[]
-  rotate?: number
-  isFlipV?: boolean
-  isFlipH?: boolean
-}
-
-export interface PptxtojsonMathElement extends PptxtojsonElementBase {
-  type: 'math'
-  latex?: string
-  picBase64?: string
-  text?: string
-  order?: number
-}
-
-export type PptxtojsonElement =
-  | PptxtojsonTextElement
-  | PptxtojsonShapeElement
-  | PptxtojsonImageElement
-  | PptxtojsonVideoElement
-  | PptxtojsonAudioElement
-  | PptxtojsonTableElement
-  | PptxtojsonChartElement
-  | PptxtojsonDiagramElement
-  | PptxtojsonGroupElement
-  | PptxtojsonMathElement
-
-export interface PptxtojsonSlide {
-  fill: PptxtojsonFill
-  elements: PptxtojsonElement[]
-  layoutElements: PptxtojsonElement[]
-  note?: string
-  transition?: PptxtojsonTransition | null
-}
-
-export interface PptxtojsonOutput {
-  slides: PptxtojsonSlide[]
+export interface Output {
+  slides: Slide[]
   themeColors: string[]
-  size: PptxtojsonSize
+  size: Size
 }
