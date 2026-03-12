@@ -283,7 +283,7 @@ function buildDiagramGroup(
 /**
  * Parse a single child node from spTree, dispatching to the appropriate parser.
  */
-function parseChildNode(
+export function parseChildNode(
   child: SafeXmlNode,
   rels: Map<string, RelEntry>,
   slidePath: string,

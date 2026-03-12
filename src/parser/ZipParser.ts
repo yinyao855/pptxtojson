@@ -19,19 +19,23 @@ export interface PptxFiles {
   themes: Map<string, string>;
   media: Map<string, Uint8Array>;
   tableStyles?: string;
-  charts: Map<string, string>;
-  chartStyles: Map<string, string>;
-  chartColors: Map<string, string>;
-  diagramDrawings: Map<string, string>;
-  /** ppt/notesSlides/notesSlideN.xml — for slide notes. */
-  notesSlides: Map<string, string>;
+  charts: Map<string, string>; // ppt/charts/chart*.xml
+  chartStyles: Map<string, string>; // ppt/charts/style*.xml
+  chartColors: Map<string, string>; // ppt/charts/colors*.xml
+  diagramDrawings: Map<string, string>; // ppt/diagrams/drawing*.xml (SmartArt fallback)
+  notesSlides: Map<string, string>; // ppt/notesSlides/notesSlide*.xml
 }
 
 export interface ZipParseLimits {
+  /** Maximum number of non-directory entries in the zip archive. */
   maxEntries?: number;
+  /** Maximum uncompressed size for any single entry (bytes). */
   maxEntryUncompressedBytes?: number;
+  /** Maximum total uncompressed size across all entries (bytes). */
   maxTotalUncompressedBytes?: number;
+  /** Maximum uncompressed size across media entries under `ppt/media/` (bytes). */
   maxMediaBytes?: number;
+  /** Maximum concurrent zip entry reads during parsing. */
   maxConcurrency?: number;
 }
 
@@ -65,6 +69,9 @@ async function mapWithConcurrency<T>(
   await Promise.all(workers);
 }
 
+/**
+ * Parse a .pptx file buffer and extract all relevant files, categorized by type.
+ */
 export async function parseZip(
   buffer: ArrayBuffer,
   limits: ZipParseLimits = {},
@@ -142,26 +149,31 @@ export async function parseZip(
   await mapWithConcurrency(entries, maxConcurrency, async ([path, file]) => {
     const normalizedPath = path.replace(/\\/g, '/');
 
+    // --- Content Types ---
     if (normalizedPath === '[Content_Types].xml') {
       result.contentTypes = await file.async('string');
       return;
     }
 
+    // --- Presentation ---
     if (normalizedPath === 'ppt/presentation.xml') {
       result.presentation = await file.async('string');
       return;
     }
 
+    // --- Presentation Rels ---
     if (normalizedPath === 'ppt/_rels/presentation.xml.rels') {
       result.presentationRels = await file.async('string');
       return;
     }
 
+    // --- Table Styles ---
     if (normalizedPath === 'ppt/tableStyles.xml') {
       result.tableStyles = await file.async('string');
       return;
     }
 
+    // --- Media (binary) ---
     if (normalizedPath.startsWith('ppt/media/')) {
       const bytes = await file.async('uint8array');
       if (!knownSizeByPath.has(normalizedPath)) {
@@ -188,61 +200,73 @@ export async function parseZip(
       return;
     }
 
+    // --- Slide Rels (must check before slides to avoid false match) ---
     if (/^ppt\/slides\/_rels\/slide\d+\.xml\.rels$/.test(normalizedPath)) {
       result.slideRels.set(normalizedPath, await file.async('string'));
       return;
     }
 
+    // --- Slides ---
     if (/^ppt\/slides\/slide\d+\.xml$/.test(normalizedPath)) {
       result.slides.set(normalizedPath, await file.async('string'));
       return;
     }
 
+    // --- Notes Slides ---
     if (/^ppt\/notesSlides\/notesSlide\d+\.xml$/.test(normalizedPath)) {
       result.notesSlides.set(normalizedPath, await file.async('string'));
       return;
     }
 
+    // --- Slide Layout Rels ---
     if (/^ppt\/slideLayouts\/_rels\/slideLayout\d+\.xml\.rels$/.test(normalizedPath)) {
       result.slideLayoutRels.set(normalizedPath, await file.async('string'));
       return;
     }
 
+    // --- Slide Layouts ---
     if (/^ppt\/slideLayouts\/slideLayout\d+\.xml$/.test(normalizedPath)) {
       result.slideLayouts.set(normalizedPath, await file.async('string'));
       return;
     }
 
+    // --- Slide Master Rels ---
     if (/^ppt\/slideMasters\/_rels\/slideMaster\d+\.xml\.rels$/.test(normalizedPath)) {
       result.slideMasterRels.set(normalizedPath, await file.async('string'));
       return;
     }
 
+    // --- Slide Masters ---
     if (/^ppt\/slideMasters\/slideMaster\d+\.xml$/.test(normalizedPath)) {
       result.slideMasters.set(normalizedPath, await file.async('string'));
       return;
     }
 
+    // --- Themes ---
     if (/^ppt\/theme\/theme\d+\.xml$/.test(normalizedPath)) {
       result.themes.set(normalizedPath, await file.async('string'));
       return;
     }
 
+    // --- Charts ---
     if (/^ppt\/charts\/chart\d+\.xml$/.test(normalizedPath)) {
       result.charts.set(normalizedPath, await file.async('string'));
       return;
     }
 
+    // --- Chart Styles ---
     if (/^ppt\/charts\/style\d+\.xml$/.test(normalizedPath)) {
       result.chartStyles.set(normalizedPath, await file.async('string'));
       return;
     }
 
+    // --- Chart Colors ---
     if (/^ppt\/charts\/colors\d+\.xml$/.test(normalizedPath)) {
       result.chartColors.set(normalizedPath, await file.async('string'));
       return;
     }
 
+    // --- Diagram Drawings (SmartArt fallback) ---
     if (/^ppt\/diagrams\/drawing\d+\.xml$/.test(normalizedPath)) {
       result.diagramDrawings.set(normalizedPath, await file.async('string'));
       return;
