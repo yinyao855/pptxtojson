@@ -17,21 +17,33 @@ export interface PicNodeData extends BaseNodeData {
   blipEmbed?: string;
   blipLink?: string;
   crop?: CropRect;
+  /** @internal Raw XML node — opaque to consumers. Use serializePresentation() for JSON-safe data. */
   fill?: SafeXmlNode;
+  /** @internal Raw XML node — opaque to consumers. Use serializePresentation() for JSON-safe data. */
   line?: SafeXmlNode;
   isVideo?: boolean;
   isAudio?: boolean;
   mediaRId?: string;
 }
 
+/** OOXML encodes srcRect percentages as 1/100000 of full extent. */
 const CROP_DIVISOR = 100000;
 
+/**
+ * Parse a picture XML node (`p:pic`) into PicNodeData.
+ */
 export function parsePicNode(picNode: SafeXmlNode): PicNodeData {
   const base = parseBaseProps(picNode);
+
+  // --- Blip fill ---
   const blipFill = picNode.child('blipFill');
   const blip = blipFill.child('blip');
+
+  // Try both namespaced and non-namespaced embed attribute
   const blipEmbed = blip.attr('embed') ?? blip.attr('r:embed');
   const blipLink = blip.attr('link') ?? blip.attr('r:link');
+
+  // --- Crop (srcRect) ---
   const srcRect = blipFill.child('srcRect');
   let crop: CropRect | undefined;
   if (srcRect.exists()) {
@@ -48,21 +60,33 @@ export function parsePicNode(picNode: SafeXmlNode): PicNodeData {
       };
     }
   }
+
+  // --- Shape properties (fill + line) ---
   const spPr = picNode.child('spPr');
   const solidFill = spPr.child('solidFill');
   const gradFill = spPr.child('gradFill');
   const fill = solidFill.exists() ? solidFill : gradFill.exists() ? gradFill : undefined;
+
   const ln = spPr.child('ln');
   const line = ln.exists() ? ln : undefined;
+
+  // --- Video / Audio detection ---
   const nvPicPr = picNode.child('nvPicPr');
   const nvPr = nvPicPr.child('nvPr');
+
   const videoFile = nvPr.child('videoFile');
   const audioFile = nvPr.child('audioFile');
+
   const isVideo = videoFile.exists();
   const isAudio = audioFile.exists();
+
   let mediaRId: string | undefined;
-  if (isVideo) mediaRId = videoFile.attr('link') ?? videoFile.attr('r:link');
-  else if (isAudio) mediaRId = audioFile.attr('link') ?? audioFile.attr('r:link');
+  if (isVideo) {
+    mediaRId = videoFile.attr('link') ?? videoFile.attr('r:link');
+  } else if (isAudio) {
+    mediaRId = audioFile.attr('link') ?? audioFile.attr('r:link');
+  }
+
   return {
     ...base,
     nodeType: 'picture',

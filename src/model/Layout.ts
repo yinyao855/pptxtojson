@@ -14,6 +14,7 @@ export interface PlaceholderXfrm {
 
 export interface PlaceholderEntry {
   node: SafeXmlNode;
+  /** When placeholder is inside a group, position/size in slide space (px). */
   absoluteXfrm?: PlaceholderXfrm;
 }
 
@@ -23,9 +24,13 @@ export interface LayoutData {
   placeholders: PlaceholderEntry[];
   spTree: SafeXmlNode;
   rels: Map<string, RelEntry>;
+  /** When false, shapes from the slide master should NOT be rendered on this layout. */
   showMasterSp: boolean;
 }
 
+/**
+ * Check whether a shape node contains a placeholder definition.
+ */
 function isPlaceholder(node: SafeXmlNode): boolean {
   const nvSpPr = node.child('nvSpPr');
   if (nvSpPr.exists()) {
@@ -49,12 +54,11 @@ function getShapeXfrmInEmu(
   if (!xfrm.exists()) return null;
   const off = xfrm.child('off');
   const ext = xfrm.child('ext');
-  return {
-    offX: off.numAttr('x') ?? 0,
-    offY: off.numAttr('y') ?? 0,
-    cx: ext.numAttr('cx') ?? 0,
-    cy: ext.numAttr('cy') ?? 0,
-  };
+  const offX = off.numAttr('x') ?? 0;
+  const offY = off.numAttr('y') ?? 0;
+  const cx = ext.numAttr('cx') ?? 0;
+  const cy = ext.numAttr('cy') ?? 0;
+  return { offX, offY, cx, cy };
 }
 
 function getGroupXfrmInEmu(grpSp: SafeXmlNode): {
@@ -79,18 +83,26 @@ function getGroupXfrmInEmu(grpSp: SafeXmlNode): {
   const offY = off.numAttr('y') ?? 0;
   const cx = ext.numAttr('cx') ?? 0;
   const cy = ext.numAttr('cy') ?? 0;
+  // OOXML: when chOff/chExt omitted, child box equals group box (chOff=0,0 and chExt=ext)
   const chOffX = chOff.exists() ? (chOff.numAttr('x') ?? 0) : 0;
   const chOffY = chOff.exists() ? (chOff.numAttr('y') ?? 0) : 0;
   const chExtCx = chExt.exists() ? (chExt.numAttr('cx') ?? cx) : cx;
   const chExtCy = chExt.exists() ? (chExt.numAttr('cy') ?? cy) : cy;
   return {
-    offX, offY, cx, cy,
-    chOffX, chOffY,
+    offX,
+    offY,
+    cx,
+    cy,
+    chOffX,
+    chOffY,
     chExtCx: chExtCx > 0 ? chExtCx : 1,
     chExtCy: chExtCy > 0 ? chExtCy : 1,
   };
 }
 
+/**
+ * Recursively collect placeholders; when inside a group, compute position/size in slide space.
+ */
 function extractPlaceholdersRecursive(
   spTree: SafeXmlNode,
   groupTransform: { offX: number; offY: number; scaleX: number; scaleY: number } | null,
@@ -112,7 +124,8 @@ function extractPlaceholdersRecursive(
               scaleY: groupTransform.scaleY * scaleY,
             }
           : { offX: baseOffX, offY: baseOffY, scaleX, scaleY };
-        out.push(...extractPlaceholdersRecursive(child, nextTransform));
+        const nested = extractPlaceholdersRecursive(child, nextTransform);
+        out.push(...nested);
       } else {
         out.push(...extractPlaceholdersRecursive(child, groupTransform));
       }
@@ -149,6 +162,9 @@ function extractPlaceholdersRecursive(
   return out;
 }
 
+/**
+ * Parse all attributes of a node into a Map<string, string>.
+ */
 function parseAllAttributes(node: SafeXmlNode): Map<string, string> {
   const result = new Map<string, string>();
   const el = node.element;
@@ -161,11 +177,20 @@ function parseAllAttributes(node: SafeXmlNode): Map<string, string> {
   return result;
 }
 
+/**
+ * Parse a slide layout XML root (`p:sldLayout`) into LayoutData.
+ */
 export function parseLayout(root: SafeXmlNode): LayoutData {
   const cSld = root.child('cSld');
+
+  // --- Background ---
   const bg = cSld.child('bg');
   const background = bg.exists() ? bg : undefined;
+
+  // --- Shape tree ---
   const spTree = cSld.child('spTree');
+
+  // --- Color map override ---
   let colorMapOverride: Map<string, string> | undefined;
   const clrMapOvr = root.child('clrMapOvr');
   if (clrMapOvr.exists()) {
@@ -174,15 +199,20 @@ export function parseLayout(root: SafeXmlNode): LayoutData {
       colorMapOverride = parseAllAttributes(overrideMapping);
     }
   }
+
+  // --- Placeholders (recursive so we find title/body inside grpSp; resolve position in slide space) ---
   const placeholders = extractPlaceholdersRecursive(spTree, null);
+
+  // --- showMasterSp: if "0", master shapes should not be rendered for this layout ---
   const showMasterSpAttr = root.attr('showMasterSp');
   const showMasterSp = showMasterSpAttr !== '0';
+
   return {
     colorMapOverride,
     background,
     placeholders,
     spTree,
-    rels: new Map(),
+    rels: new Map(), // populated later by buildPresentation
     showMasterSp,
   };
 }
