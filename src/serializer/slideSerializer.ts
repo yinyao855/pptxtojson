@@ -1,0 +1,221 @@
+/**
+ * Slide serializer — orchestrates background fill, layoutElements, and slide elements
+ * using the same order as SlideRenderer: fill → master template shapes → layout template shapes → slide nodes.
+ */
+
+import type { SafeXmlNode } from '../parser/XmlParser';
+import type { SlideData } from '../model/Slide';
+import type { SlideNode } from '../model/Slide';
+import { parseShapeNode } from '../model/nodes/ShapeNode';
+import { parsePicNode } from '../model/nodes/PicNode';
+import { parseGroupNode } from '../model/nodes/GroupNode';
+import { parseTableNode } from '../model/nodes/TableNode';
+import type { PresentationData } from '../model/Presentation';
+import type { PptxFiles } from '../parser/ZipParser';
+import { createRenderContext } from '../resolve/RenderContext';
+import { resolveSlideFill } from './backgroundSerializer';
+import { shapeToElement } from './shapeSerializer';
+import { pictureToElement } from './imageSerializer';
+import { tableToElement } from './tableSerializer';
+import { chartToElement } from './chartSerializer';
+import { groupToElement, type NodeToElement } from './groupSerializer';
+import type { Slide, Element } from '../adapter/types';
+import { parseXml } from '../parser/XmlParser';
+import { resolveRelTarget } from '../parser/RelParser';
+
+function isPlaceholderNode(node: SafeXmlNode): boolean {
+  for (const wrapper of ['nvSpPr', 'nvPicPr', 'nvGrpSpPr', 'nvGraphicFramePr', 'nvCxnSpPr']) {
+    const nv = node.child(wrapper);
+    if (nv.exists()) {
+      const nvPr = nv.child('nvPr');
+      if (nvPr.child('ph').exists()) return true;
+    }
+  }
+  return false;
+}
+
+function isTableFrame(node: SafeXmlNode): boolean {
+  const graphic = node.child('graphic');
+  const graphicData = graphic.child('graphicData');
+  return graphicData.child('tbl').exists();
+}
+
+function isChartFrame(node: SafeXmlNode): boolean {
+  const graphic = node.child('graphic');
+  const graphicData = graphic.child('graphicData');
+  const uri = graphicData.attr('uri') || '';
+  return uri.includes('chart');
+}
+
+/**
+ * Parse non-placeholder shapes from a master or layout spTree into SlideNode[].
+ */
+function parseTemplateShapes(spTree: SafeXmlNode): SlideNode[] {
+  const nodes: SlideNode[] = [];
+  if (!spTree?.exists?.() || !spTree.exists()) return nodes;
+
+  for (const child of spTree.allChildren()) {
+    const tag = child.localName;
+    if (isPlaceholderNode(child)) continue;
+
+    try {
+      let node: SlideNode | undefined;
+      switch (tag) {
+        case 'sp':
+        case 'cxnSp':
+          node = parseShapeNode(child);
+          break;
+        case 'pic':
+          node = parsePicNode(child);
+          break;
+        case 'grpSp':
+          node = parseGroupNode(child);
+          break;
+        case 'graphicFrame':
+          if (isTableFrame(child)) node = parseTableNode(child);
+          break;
+      }
+      if (node && (node.size.w > 0 || node.size.h > 0)) {
+        nodes.push(node);
+      }
+    } catch {
+      // skip unparseable
+    }
+  }
+  return nodes;
+}
+
+/**
+ * Dispatch a slide node to the appropriate serializer and return Element.
+ */
+function nodeToElement(
+  node: SlideNode,
+  ctx: ReturnType<typeof createRenderContext>,
+  order: number,
+  files?: PptxFiles,
+): Element {
+  switch (node.nodeType) {
+    case 'shape':
+      return shapeToElement(node, ctx, order);
+    case 'picture':
+      return pictureToElement(node, ctx, order);
+    case 'table':
+      return tableToElement(node, ctx, order);
+    case 'chart':
+      return chartToElement(node, ctx, order);
+    case 'group':
+      return groupToElement(node, ctx, order, files, nodeToElement as NodeToElement);
+    default:
+      return shapeToElement(node as import('../model/nodes/ShapeNode').ShapeNodeData, ctx, order);
+  }
+}
+
+function getNoteForSlide(slide: SlideData, files: PptxFiles): string {
+  for (const [, entry] of slide.rels) {
+    if (!entry.type.includes('notesSlide')) continue;
+    const basePath = slide.slidePath.replace(/\/[^/]+$/, '');
+    const notesPath = resolveRelTarget(basePath, entry.target);
+    const notesXml = files.notesSlides.get(notesPath);
+    if (!notesXml) continue;
+    const root = parseXml(notesXml);
+    const cSld = root.child('cSld');
+    if (!cSld.exists()) continue;
+    const spTree = cSld.child('spTree');
+    const parts: string[] = [];
+    for (const sp of spTree.allChildren()) {
+      if (sp.localName !== 'sp') continue;
+      const nvPr = sp.child('nvSpPr').child('nvPr');
+      const ph = nvPr.child('ph');
+      if (ph.attr('type') !== 'body') continue;
+      const txBody = sp.child('txBody');
+      if (!txBody.exists()) continue;
+      for (const p of txBody.children('p')) {
+        for (const r of p.children('r')) {
+          const t = r.child('t');
+          parts.push(t.text());
+        }
+      }
+    }
+    return parts.length > 0 ? parts.join('').trim() : '';
+  }
+  return '';
+}
+
+function getTransitionForSlide(slide: SlideData, files: PptxFiles): Slide['transition'] {
+  const slideXml = files.slides.get(slide.slidePath);
+  if (!slideXml) return undefined;
+  const root = parseXml(slideXml);
+  const transition = root.child('transition');
+  if (!transition.exists()) return undefined;
+  let type = 'none';
+  let duration = 1000;
+  let direction: string | null = null;
+  for (const child of transition.allChildren()) {
+    if (child.localName && child.localName !== 'p14:transition') {
+      type = child.localName;
+      break;
+    }
+  }
+  const spd = transition.attr('spd');
+  if (spd === 'fast') duration = 500;
+  else if (spd === 'med') duration = 800;
+  else if (spd === 'slow') duration = 1000;
+  const dir = transition.attr('dir');
+  if (dir) direction = dir;
+  return { type, duration, direction };
+}
+
+/**
+ * Serialize one slide to pptxtojson Slide (fill, layoutElements, elements, note, transition).
+ */
+export function slideToSlide(
+  presentation: PresentationData,
+  slide: SlideData,
+  files: PptxFiles,
+): Slide {
+  const ctx = createRenderContext(presentation, slide);
+  const fill = resolveSlideFill(ctx);
+
+  const layoutElements: Element[] = [];
+  if (slide.showMasterSp && ctx.layout.showMasterSp) {
+    const masterCtx = { ...ctx, slide: { ...ctx.slide, rels: ctx.master.rels } };
+    const masterShapes = parseTemplateShapes(ctx.master.spTree);
+    masterShapes.forEach((node, i) => {
+      try {
+        layoutElements.push(nodeToElement(node, masterCtx, i, files));
+      } catch {
+        // skip
+      }
+    });
+  }
+  if (slide.showMasterSp) {
+    const layoutCtx = { ...ctx, slide: { ...ctx.slide, rels: ctx.layout.rels } };
+    const layoutShapes = parseTemplateShapes(ctx.layout.spTree);
+    layoutShapes.forEach((node, i) => {
+      try {
+        layoutElements.push(nodeToElement(node, layoutCtx, i, files));
+      } catch {
+        // skip
+      }
+    });
+  }
+
+  const elements: Element[] = [];
+  slide.nodes.forEach((node, i) => {
+    try {
+      elements.push(nodeToElement(node, ctx, i, files));
+    } catch {
+      // skip failed node
+    }
+  });
+
+  return {
+    fill,
+    elements,
+    layoutElements,
+    note: getNoteForSlide(slide, files),
+    transition: getTransitionForSlide(slide, files),
+  };
+}
+
+export { nodeToElement };

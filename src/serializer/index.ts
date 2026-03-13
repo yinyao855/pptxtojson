@@ -1,0 +1,20 @@
+/**
+ * Serializer layer: converts PresentationData (and render context) into
+ * pptxtojson/PPTist JSON using the same resolution flow as the reference renderer.
+ */
+
+export {
+  spPrToFill,
+  bgRefToFill,
+  gradientFillDataToValue,
+  type SpPrToFillOptions,
+} from './fillMapper';
+export { lineStyleToBorder, dashArrayForKind, type BorderResult } from './borderMapper';
+export { slideToSlide, nodeToElement } from './slideSerializer';
+export { resolveSlideFill } from './backgroundSerializer';
+export { shapeToElement } from './shapeSerializer';
+export { pictureToElement } from './imageSerializer';
+export { tableToElement } from './tableSerializer';
+export { chartToElement } from './chartSerializer';
+export { groupToElement, type NodeToElement } from './groupSerializer';
+export type { Slide as OutputSlide } from '../adapter/types';
