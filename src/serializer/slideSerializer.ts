@@ -23,6 +23,9 @@ import type { Slide, Element } from '../adapter/types';
 import { parseXml } from '../parser/XmlParser';
 import { resolveRelTarget } from '../parser/RelParser';
 
+/**
+ * Check whether a shape node is a placeholder (has p:ph in nvPr).
+ */
 function isPlaceholderNode(node: SafeXmlNode): boolean {
   for (const wrapper of ['nvSpPr', 'nvPicPr', 'nvGrpSpPr', 'nvGraphicFramePr', 'nvCxnSpPr']) {
     const nv = node.child(wrapper);
@@ -48,7 +51,10 @@ function isChartFrame(node: SafeXmlNode): boolean {
 }
 
 /**
- * Parse non-placeholder shapes from a master or layout spTree into SlideNode[].
+ * Parse and collect renderable shapes from a master or layout spTree.
+ * Only includes NON-placeholder shapes (decorative elements, logos, footers).
+ * Placeholder shapes are never rendered from master/layout — they only serve
+ * as position/size inheritance templates.
  */
 function parseTemplateShapes(spTree: SafeXmlNode): SlideNode[] {
   const nodes: SlideNode[] = [];
@@ -56,6 +62,8 @@ function parseTemplateShapes(spTree: SafeXmlNode): SlideNode[] {
 
   for (const child of spTree.allChildren()) {
     const tag = child.localName;
+
+    // Skip ALL placeholder shapes — they're templates, not renderable content
     if (isPlaceholderNode(child)) continue;
 
     try {
@@ -75,11 +83,12 @@ function parseTemplateShapes(spTree: SafeXmlNode): SlideNode[] {
           if (isTableFrame(child)) node = parseTableNode(child);
           break;
       }
+      // Skip empty/invisible nodes (0x0 size and no text)
       if (node && (node.size.w > 0 || node.size.h > 0)) {
         nodes.push(node);
       }
     } catch {
-      // skip unparseable
+      // Skip unparseable template shapes silently
     }
   }
   return nodes;
@@ -165,17 +174,34 @@ function getTransitionForSlide(slide: SlideData, files: PptxFiles): Slide['trans
   return { type, duration, direction };
 }
 
+// ---------------------------------------------------------------------------
+// Main Slide Serialize Function
+// ---------------------------------------------------------------------------
+
 /**
  * Serialize one slide to pptxtojson Slide (fill, layoutElements, elements, note, transition).
+ * 
+ * Order:
+ * 1. Background (slide → layout → master inheritance)
+ * 2. Master non-placeholder shapes (behind everything)
+ * 3. Layout non-placeholder shapes
+ * 4. Slide shapes (on top)
  */
 export function slideToSlide(
   presentation: PresentationData,
   slide: SlideData,
   files: PptxFiles,
 ): Slide {
+  // Create render context (resolves slide -> layout -> master -> theme chain)
   const ctx = createRenderContext(presentation, slide);
+
+  // Render background
   const fill = resolveSlideFill(ctx);
 
+  // --- Render master template shapes (behind layout and slide) ---
+  // Respect showMasterSp flags:
+  //  - layout.showMasterSp === false  → skip master shapes
+  //  - slide.showMasterSp === false   → skip both master AND layout shapes
   const layoutElements: Element[] = [];
   if (slide.showMasterSp && ctx.layout.showMasterSp) {
     const masterCtx = { ...ctx, slide: { ...ctx.slide, rels: ctx.master.rels } };
@@ -188,6 +214,8 @@ export function slideToSlide(
       }
     });
   }
+
+  // --- Render layout template shapes ---
   if (slide.showMasterSp) {
     const layoutCtx = { ...ctx, slide: { ...ctx.slide, rels: ctx.layout.rels } };
     const layoutShapes = parseTemplateShapes(ctx.layout.spTree);
@@ -200,6 +228,7 @@ export function slideToSlide(
     });
   }
 
+  // --- Render slide shapes (on top) ---
   const elements: Element[] = [];
   slide.nodes.forEach((node, i) => {
     try {

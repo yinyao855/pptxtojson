@@ -41,6 +41,7 @@ export function resolveSlideFill(ctx: RenderContext): Fill {
 
   if (!bgNode?.exists()) return defaultFill();
 
+  // Parse p:bg > p:bgPr
   const bgPr = bgNode.child('bgPr');
   if (bgPr.exists()) {
     const fill = spPrToFill(bgPr, ctx, { rels, basePath });
@@ -48,6 +49,7 @@ export function resolveSlideFill(ctx: RenderContext): Fill {
     return fill;
   }
 
+  // Parse p:bg > p:bgRef (theme reference)
   const bgRef = bgNode.child('bgRef');
   if (bgRef.exists()) {
     const fill = bgRefToFill(bgRef, ctx);

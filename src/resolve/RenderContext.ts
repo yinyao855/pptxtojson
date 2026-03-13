@@ -15,9 +15,15 @@ export interface RenderContext {
   theme: ThemeData;
   master: MasterData;
   layout: LayoutData;
-  mediaUrlCache: Map<string, string>;
+  mediaUrlCache: Map<string, string>; // path -> blob URL
   colorCache: Map<string, { color: string; alpha: number }>;
+  /** Fill node from parent group's grpSpPr, used to resolve `a:grpFill` in children. */
   groupFillNode?: SafeXmlNode;
+  /**
+   * Navigation callback for shape-level hyperlink actions (action buttons, clickable shapes).
+   * Called with target slide index (0-based) for `ppaction://hlinksldjump`,
+   * or with a URL string for external links.
+   */
   onNavigate?: (target: { slideIndex?: number; url?: string }) => void;
 }
 
@@ -26,6 +32,7 @@ export function createRenderContext(
   slide: SlideData,
   mediaUrlCache?: Map<string, string>,
 ): RenderContext {
+  // Resolve the chain: slide -> layout -> master -> theme
   const layoutPath = presentation.slideToLayout.get(slide.index) || '';
   const masterPath = presentation.layoutToMaster.get(layoutPath) || '';
   const themePath = presentation.masterToTheme.get(masterPath) || '';
