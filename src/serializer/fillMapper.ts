@@ -12,6 +12,7 @@ import {
 } from '../resolve/StyleResolver';
 import { resolveRelTarget } from '../parser/RelParser';
 import type { RelEntry } from '../parser/RelParser';
+import { getMimeType, toDataUrl } from '../utils/media';
 import type { Fill, ColorFill, ImageFill, GradientFill, PatternFill } from '../adapter/types';
 
 export interface SpPrToFillOptions {
@@ -83,9 +84,11 @@ export function spPrToFill(
         const data = ctx.presentation.media.get(mediaPath);
         if (data) {
           const base64 = arrayBufferToBase64(data);
+          const mime = getMimeType(mediaPath);
+          const picBase64 = toDataUrl(base64, mime);
           return {
             type: 'image',
-            value: { picBase64: base64, opacity: 1 },
+            value: { picBase64, opacity: 1 },
           };
         }
       }

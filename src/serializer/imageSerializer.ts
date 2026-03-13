@@ -6,6 +6,7 @@
 import type { PicNodeData } from '../model/nodes/PicNode';
 import type { RenderContext } from '../resolve/RenderContext';
 import { resolveRelTarget } from '../parser/RelParser';
+import { getMimeType, toDataUrl } from '../utils/media';
 import { lineStyleToBorder } from './borderMapper';
 import type { Image as ImageElement, Video, Audio } from '../adapter/types';
 
@@ -25,16 +26,6 @@ function arrayBufferToBase64(data: Uint8Array): string {
   const NodeBuffer = (typeof globalThis !== 'undefined' && (globalThis as unknown as { Buffer?: { from(a: Uint8Array): { toString(e: string): string } } }).Buffer);
   if (NodeBuffer) return NodeBuffer.from(data).toString('base64');
   return btoa(binary);
-}
-
-/**
- * Build data URL for image from media bytes (data:image/png;base64,... or just base64).
- * PPTist may expect src as data URL or base64; types say src: string.
- */
-function mediaToDataUrl(data: Uint8Array, mime?: string): string {
-  const base64 = arrayBufferToBase64(data);
-  const type = mime || 'image/png';
-  return `data:${type};base64,${base64}`;
 }
 
 /**
@@ -60,7 +51,8 @@ export function pictureToElement(
       const data = ctx.presentation.media.get(mediaPath);
       if (data) {
         const b64 = arrayBufferToBase64(data);
-        src = `data:image/png;base64,${b64}`;
+        const mime = getMimeType(mediaPath);
+        src = toDataUrl(b64, mime);
         blob = b64;
       }
     }
