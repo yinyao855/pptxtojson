@@ -12,7 +12,7 @@ import {
 } from '../resolve/StyleResolver';
 import { resolveRelTarget } from '../parser/RelParser';
 import type { RelEntry } from '../parser/RelParser';
-import { getMimeType, toDataUrl } from '../utils/media';
+import { encodeMediaForWebDisplay } from '../utils/mediaWebConvert';
 import type { Fill, ColorFill, ImageFill, GradientFill, PatternFill } from '../adapter/types';
 
 export interface SpPrToFillOptions {
@@ -83,9 +83,7 @@ export function spPrToFill(
         const mediaPath = resolveRelTarget(basePath, rel.target);
         const data = ctx.presentation.media.get(mediaPath);
         if (data) {
-          const base64 = arrayBufferToBase64(data);
-          const mime = getMimeType(mediaPath);
-          const picBase64 = toDataUrl(base64, mime);
+          const picBase64 = encodeMediaForWebDisplay(mediaPath, data);
           return {
             type: 'image',
             value: { picBase64, opacity: 1 },
@@ -142,16 +140,4 @@ export function bgRefToFill(bgRef: SafeXmlNode, ctx: RenderContext): Fill {
     return { type: 'color', value: hex };
   }
   return { type: 'color', value: '#ffffff' };
-}
-
-function arrayBufferToBase64(data: Uint8Array): string {
-  let binary = '';
-  const len = data.byteLength;
-  for (let i = 0; i < len; i++) {
-    binary += String.fromCharCode(data[i]);
-  }
-  if (typeof btoa !== 'undefined') return btoa(binary);
-  const NodeBuffer = (typeof globalThis !== 'undefined' && (globalThis as unknown as { Buffer?: { from(a: Uint8Array): { toString(e: string): string } } }).Buffer);
-  if (NodeBuffer) return NodeBuffer.from(data).toString('base64');
-  return btoa(binary);
 }

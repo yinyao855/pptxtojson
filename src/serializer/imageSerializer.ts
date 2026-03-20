@@ -6,7 +6,7 @@
 import type { PicNodeData } from '../model/nodes/PicNode';
 import type { RenderContext } from '../resolve/RenderContext';
 import { resolveRelTarget } from '../parser/RelParser';
-import { getMimeType, toDataUrl } from '../utils/media';
+import { encodeMediaForWebDisplay } from '../utils/mediaWebConvert';
 import { lineStyleToBorder } from './borderMapper';
 import type { Image as ImageElement, Video, Audio } from '../adapter/types';
 
@@ -16,16 +16,9 @@ function pxToPt(px: number): number {
   return px * PX_TO_PT;
 }
 
-function arrayBufferToBase64(data: Uint8Array): string {
-  let binary = '';
-  const len = data.byteLength;
-  for (let i = 0; i < len; i++) {
-    binary += String.fromCharCode(data[i]);
-  }
-  if (typeof btoa !== 'undefined') return btoa(binary);
-  const NodeBuffer = (typeof globalThis !== 'undefined' && (globalThis as unknown as { Buffer?: { from(a: Uint8Array): { toString(e: string): string } } }).Buffer);
-  if (NodeBuffer) return NodeBuffer.from(data).toString('base64');
-  return btoa(binary);
+function dataUrlToRawBase64(dataUrl: string): string {
+  const m = /^data:[^;]+;base64,(.+)$/.exec(dataUrl);
+  return m ? m[1] : '';
 }
 
 /**
@@ -50,10 +43,8 @@ export function pictureToElement(
       const mediaPath = resolveRelTarget(basePath, rel.target);
       const data = ctx.presentation.media.get(mediaPath);
       if (data) {
-        const b64 = arrayBufferToBase64(data);
-        const mime = getMimeType(mediaPath);
-        src = toDataUrl(b64, mime);
-        blob = b64;
+        src = encodeMediaForWebDisplay(mediaPath, data);
+        blob = dataUrlToRawBase64(src);
       }
     }
   }

@@ -10,7 +10,8 @@
 		"clean:dist": "rimraf dist",
 		"build": "rm -rf dist && rollup -c && tsc --emitDeclarationOnly",
 		"dev": "rollup -c -w",
-		"lint": "eslint src --ext .js,.jsx,.ts,.tsx"
+		"lint": "eslint src --ext .js,.jsx,.ts,.tsx",
+		"transvert": "node scripts/transvert.js"
 	},
 	"author": "pipipi_pikachu@163.com",
 	"repository": {
@@ -29,8 +30,10 @@
 	},
 	"dependencies": {
 		"jszip": "^3.10.1",
+		"pngjs": "^7.0.0",
 		"tinycolor2": "1.6.0",
-		"txml": "^5.1.1"
+		"txml": "^5.1.1",
+		"utif": "^3.1.0"
 	},
 	"devDependencies": {
 		"@babel/core": "^7.20.2",

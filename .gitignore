@@ -19,3 +19,10 @@ pnpm-debug.log*
 *.njsproj
 *.sln
 *.sw?
+
+extracted-pptx
+pptx-renderer-main
+*.pptx
+.pnpm-store
+dist
+docs
