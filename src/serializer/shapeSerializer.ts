@@ -61,7 +61,7 @@ export function shapeToElement(
     border: { borderColor: '#000000', borderWidth: 0, borderType: 'solid' as const },
     borderStrokeDasharray: '',
   };
-  const content = node.textBody ? textToHtml(ctx, node.textBody) : '';
+  const content = node.textBody ? textToHtml(ctx, node.textBody, node.placeholder) : '';
   const hasContent = hasVisibleText(node.textBody);
   const bodyPr = node.textBody?.bodyProperties;
   const vAlign = bodyPr?.attr ? getVAlign(bodyPr) : 'top';

@@ -4,7 +4,7 @@
  */
 
 export { createRenderContext, type RenderContext } from './RenderContext';
-export { textToHtml } from './textSerializer';
+export { textToHtml, type TextToHtmlOptions } from './textSerializer';
 export {
   spPrToFill,
   gradientFillDataToValue,
