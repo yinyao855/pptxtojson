@@ -4,12 +4,7 @@
 
 import type { SafeXmlNode } from '../parser/XmlParser';
 import type { RenderContext } from './RenderContext';
-import {
-  resolveColor,
-  resolveGradientFill,
-  resolveThemeFillReference,
-  type GradientFillData,
-} from './StyleResolver';
+import { resolveColor, resolveGradientFill, type GradientFillData } from './StyleResolver';
 import { resolveRelTarget } from '../parser/RelParser';
 import type { RelEntry } from '../parser/RelParser';
 import { encodeMediaForWebDisplay } from '../utils/mediaWebConvert';
@@ -47,9 +42,9 @@ export function gradientFillDataToValue(data: GradientFillData): GradientFill['v
 }
 
 /**
- * Resolve fill from shape properties (spPr) or background (bgPr) to types.Fill.
- * Used for both slide background and shape fill.
- * When resolving background blip from layout/master, pass options with that part's rels and basePath.
+ * Resolve fill from shape properties (`spPr`) to types.Fill.
+ * Slide backgrounds use `backgroundSerializer.bgPrToFill` / `bgRefToFill` instead (aligned with BackgroundRenderer).
+ * When resolving blip from a shape on layout/master slide, pass options with that part's rels and basePath.
  */
 export function spPrToFill(
   spPr: SafeXmlNode,
@@ -124,20 +119,5 @@ export function spPrToFill(
     return { type: 'color', value: 'transparent' };
   }
 
-  return { type: 'color', value: '#ffffff' };
-}
-
-/**
- * Resolve background from bgRef (theme reference) to types.Fill.
- */
-export function bgRefToFill(bgRef: SafeXmlNode, ctx: RenderContext): Fill {
-  const { fillCss, gradientFillData } = resolveThemeFillReference(bgRef, ctx);
-  if (gradientFillData) {
-    return { type: 'gradient', value: gradientFillDataToValue(gradientFillData) };
-  }
-  if (fillCss && fillCss !== 'transparent') {
-    const hex = fillCss.startsWith('#') ? fillCss : `#${fillCss}`;
-    return { type: 'color', value: hex };
-  }
   return { type: 'color', value: '#ffffff' };
 }

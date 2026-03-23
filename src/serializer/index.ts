@@ -7,13 +7,16 @@ export { createRenderContext, type RenderContext } from './RenderContext';
 export { textToHtml } from './textSerializer';
 export {
   spPrToFill,
-  bgRefToFill,
   gradientFillDataToValue,
   type SpPrToFillOptions,
 } from './fillMapper';
 export { lineStyleToBorder, dashArrayForKind, type BorderResult } from './borderMapper';
 export { slideToSlide, nodeToElement } from './slideSerializer';
-export { resolveSlideFill } from './backgroundSerializer';
+export {
+  resolveSlideFill,
+  renderBgPr as bgPrToFill,
+  renderBgRef as bgRefToFill,
+} from './backgroundSerializer';
 export { shapeToElement } from './shapeSerializer';
 export { pictureToElement } from './imageSerializer';
 export { tableToElement } from './tableSerializer';
