@@ -3,6 +3,7 @@
  */
 
 import type { SafeXmlNode } from '../parser/XmlParser';
+import type { PlaceholderInfo } from '../model/nodes/BaseNode';
 import type { RenderContext } from './RenderContext';
 import { resolveColor, resolveGradientFill, type GradientFillData } from './StyleResolver';
 import { resolveRelTarget } from '../parser/RelParser';
@@ -119,5 +120,105 @@ export function spPrToFill(
     return { type: 'color', value: 'transparent' };
   }
 
-  return { type: 'color', value: '#ffffff' };
+  // No explicit fill in OOXML — do not assume white (PPT treats as no fill / see-through).
+  return { type: 'color', value: 'transparent' };
+}
+
+function dirnamePackagePath(path: string): string {
+  if (!path) return '';
+  const i = path.lastIndexOf('/');
+  return i >= 0 ? path.slice(0, i) : '';
+}
+
+/** True when spPr defines how the interior is painted (including explicit no fill). */
+export function spPrHasExplicitFill(spPr: SafeXmlNode): boolean {
+  if (!spPr.exists()) return false;
+  return (
+    spPr.child('solidFill').exists() ||
+    spPr.child('gradFill').exists() ||
+    spPr.child('blipFill').exists() ||
+    spPr.child('pattFill').exists() ||
+    spPr.child('grpFill').exists() ||
+    spPr.child('noFill').exists()
+  );
+}
+
+function findPlaceholderNode(
+  placeholders: SafeXmlNode[],
+  info: PlaceholderInfo,
+): SafeXmlNode | undefined {
+  for (const ph of placeholders) {
+    let phEl: SafeXmlNode | undefined;
+    const nvSpPr = ph.child('nvSpPr');
+    if (nvSpPr.exists()) {
+      phEl = nvSpPr.child('nvPr').child('ph');
+    }
+    if (!phEl || !phEl.exists()) {
+      const nvPicPr = ph.child('nvPicPr');
+      if (nvPicPr.exists()) {
+        phEl = nvPicPr.child('nvPr').child('ph');
+      }
+    }
+    if (!phEl || !phEl.exists()) continue;
+
+    const phType = phEl.attr('type');
+    const phIdx = phEl.numAttr('idx');
+
+    if (info.idx !== undefined && phIdx === info.idx) return ph;
+    if (info.type && phType === info.type) return ph;
+  }
+  return undefined;
+}
+
+function isTransparentOnlyFill(fill: Fill): boolean {
+  return fill.type === 'color' && fill.value === 'transparent';
+}
+
+/**
+ * Resolve shape `spPr` fill for serialization. When the slide shape omits fill (only xfrm/geom etc.),
+ * PowerPoint inherits from the matching layout then master placeholder — same order as text lstStyle.
+ */
+export function resolveShapeFill(
+  spPr: SafeXmlNode,
+  ctx: RenderContext,
+  placeholder?: PlaceholderInfo,
+): Fill {
+  const direct: Fill = spPr.exists()
+    ? spPrToFill(spPr, ctx)
+    : { type: 'color', value: 'transparent' };
+
+  if (spPr.exists() && spPrHasExplicitFill(spPr)) {
+    return direct;
+  }
+
+  if (placeholder) {
+    const layoutPh = findPlaceholderNode(
+      ctx.layout.placeholders.map((e) => e.node),
+      placeholder,
+    );
+    if (layoutPh) {
+      const phSpPr = layoutPh.child('spPr');
+      if (phSpPr.exists() && spPrHasExplicitFill(phSpPr)) {
+        const fill = spPrToFill(phSpPr, ctx, {
+          rels: ctx.layout.rels,
+          basePath: dirnamePackagePath(ctx.layoutPath),
+        });
+        if (!isTransparentOnlyFill(fill)) return fill;
+      }
+    }
+
+    const masterPh = findPlaceholderNode(ctx.master.placeholders, placeholder);
+    if (masterPh) {
+      const phSpPr = masterPh.child('spPr');
+      if (phSpPr.exists() && spPrHasExplicitFill(phSpPr)) {
+        const fill = spPrToFill(phSpPr, ctx, {
+          rels: ctx.master.rels,
+          basePath: dirnamePackagePath(ctx.masterPath),
+        });
+        if (!isTransparentOnlyFill(fill)) return fill;
+      }
+    }
+  }
+
+  return direct;
 }

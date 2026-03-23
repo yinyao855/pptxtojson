@@ -15,6 +15,10 @@ export interface RenderContext {
   theme: ThemeData;
   master: MasterData;
   layout: LayoutData;
+  /** Package path to current slide layout XML, e.g. `ppt/slideLayouts/slideLayout3.xml`. Used for placeholder fill inheritance. */
+  layoutPath: string;
+  /** Package path to slide master XML, e.g. `ppt/slideMasters/slideMaster1.xml`. */
+  masterPath: string;
   mediaUrlCache: Map<string, string>; // path -> blob URL
   colorCache: Map<string, { color: string; alpha: number }>;
   /** Fill node from parent group's grpSpPr, used to resolve `a:grpFill` in children. */
@@ -67,6 +71,8 @@ export function createRenderContext(
     theme,
     master,
     layout,
+    layoutPath,
+    masterPath,
     mediaUrlCache: mediaUrlCache ?? new Map(),
     colorCache: new Map(),
   };

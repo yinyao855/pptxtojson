@@ -7,6 +7,8 @@ export { createRenderContext, type RenderContext } from './RenderContext';
 export { textToHtml, type TextToHtmlOptions } from './textSerializer';
 export {
   spPrToFill,
+  resolveShapeFill,
+  spPrHasExplicitFill,
   gradientFillDataToValue,
   type SpPrToFillOptions,
 } from './fillMapper';

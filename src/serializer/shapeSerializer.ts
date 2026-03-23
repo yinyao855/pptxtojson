@@ -7,7 +7,7 @@ import type { ShapeNodeData, TextBody } from '../model/nodes/ShapeNode';
 import type { RenderContext } from './RenderContext';
 import { getPresetShapePath } from '../shapes/presets';
 import { renderCustomGeometry } from '../shapes/customGeometry';
-import { spPrToFill } from './fillMapper';
+import { resolveShapeFill } from './fillMapper';
 import { lineStyleToBorder } from './borderMapper';
 import { textToHtml } from './textSerializer';
 import type { Shape, Text, Fill } from '../adapter/types';
@@ -55,7 +55,7 @@ export function shapeToElement(
   const width = pxToPt(node.size.w);
   const height = pxToPt(node.size.h);
   const spPr = node.source.child('spPr');
-  const fill: Fill = spPr.exists() ? spPrToFill(spPr, ctx) : { type: 'color', value: '#ffffff' };
+  const fill: Fill = resolveShapeFill(spPr, ctx, node.placeholder);
   const ln = spPr.exists() ? spPr.child('ln') : node.source.child('__none__');
   const borderResult = ln.exists() ? lineStyleToBorder(ln, ctx) : {
     border: { borderColor: '#000000', borderWidth: 0, borderType: 'solid' as const },
