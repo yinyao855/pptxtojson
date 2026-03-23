@@ -1,15 +1,15 @@
 /**
  * Serializes ShapeNodeData to pptxtojson Shape or Text element.
- * Uses same resolution as ShapeRenderer: spPr fill/line, presets/customGeometry path, textToHtml for content.
+ * Uses same resolution as ShapeRenderer: spPr fill/line, presets/customGeometry path, textSerializer for content.
  */
 
 import type { ShapeNodeData, TextBody } from '../model/nodes/ShapeNode';
-import type { RenderContext } from '../resolve/RenderContext';
+import type { RenderContext } from './RenderContext';
 import { getPresetShapePath } from '../shapes/presets';
 import { renderCustomGeometry } from '../shapes/customGeometry';
 import { spPrToFill } from './fillMapper';
 import { lineStyleToBorder } from './borderMapper';
-import { textToHtml } from '../adapter/textToHtml';
+import { textToHtml } from './textSerializer';
 import type { Shape, Text, Fill } from '../adapter/types';
 
 const PX_TO_PT = 0.75;

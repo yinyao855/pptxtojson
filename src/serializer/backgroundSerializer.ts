@@ -4,7 +4,7 @@
  */
 
 import type { SafeXmlNode } from '../parser/XmlParser';
-import type { RenderContext } from '../resolve/RenderContext';
+import type { RenderContext } from './RenderContext';
 import { spPrToFill, bgRefToFill } from './fillMapper';
 import type { Fill } from '../adapter/types';
 

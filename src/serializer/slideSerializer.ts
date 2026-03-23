@@ -12,7 +12,7 @@ import { parseGroupNode } from '../model/nodes/GroupNode';
 import { parseTableNode } from '../model/nodes/TableNode';
 import type { PresentationData } from '../model/Presentation';
 import type { PptxFiles } from '../parser/ZipParser';
-import { createRenderContext } from '../resolve/RenderContext';
+import { createRenderContext } from './RenderContext';
 import { resolveSlideFill } from './backgroundSerializer';
 import { shapeToElement } from './shapeSerializer';
 import { pictureToElement } from './imageSerializer';

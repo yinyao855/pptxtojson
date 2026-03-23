@@ -3,13 +3,13 @@
  */
 
 import type { SafeXmlNode } from '../parser/XmlParser';
-import type { RenderContext } from '../resolve/RenderContext';
+import type { RenderContext } from './RenderContext';
 import {
   resolveColor,
   resolveGradientFill,
   resolveThemeFillReference,
   type GradientFillData,
-} from '../resolve/StyleResolver';
+} from './StyleResolver';
 import { resolveRelTarget } from '../parser/RelParser';
 import type { RelEntry } from '../parser/RelParser';
 import { encodeMediaForWebDisplay } from '../utils/mediaWebConvert';

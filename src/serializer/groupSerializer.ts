@@ -6,7 +6,7 @@
 import type { GroupNodeData } from '../model/nodes/GroupNode';
 import type { SlideNode } from '../model/Slide';
 import { parseChildNode } from '../model/Slide';
-import type { RenderContext } from '../resolve/RenderContext';
+import type { RenderContext } from './RenderContext';
 import type { PptxFiles } from '../parser/ZipParser';
 import type { Group, Element, BaseElement } from '../adapter/types';
 

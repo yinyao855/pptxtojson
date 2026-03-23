@@ -3,8 +3,8 @@
  */
 
 import type { SafeXmlNode } from '../parser/XmlParser';
-import type { RenderContext } from '../resolve/RenderContext';
-import { resolveLineStyle } from '../resolve/StyleResolver';
+import type { RenderContext } from './RenderContext';
+import { resolveLineStyle } from './StyleResolver';
 import type { Border } from '../adapter/types';
 
 const PX_TO_PT = 0.75;

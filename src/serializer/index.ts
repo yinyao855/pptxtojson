@@ -3,6 +3,8 @@
  * pptxtojson/PPTist JSON using the same resolution flow as the reference renderer.
  */
 
+export { createRenderContext, type RenderContext } from './RenderContext';
+export { textToHtml } from './textSerializer';
 export {
   spPrToFill,
   bgRefToFill,

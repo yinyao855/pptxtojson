@@ -4,7 +4,7 @@
  */
 
 import type { PicNodeData } from '../model/nodes/PicNode';
-import type { RenderContext } from '../resolve/RenderContext';
+import type { RenderContext } from './RenderContext';
 import { resolveRelTarget } from '../parser/RelParser';
 import { encodeMediaForWebDisplay } from '../utils/mediaWebConvert';
 import { lineStyleToBorder } from './borderMapper';

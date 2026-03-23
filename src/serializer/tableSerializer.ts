@@ -4,8 +4,8 @@
  */
 
 import type { TableNodeData } from '../model/nodes/TableNode';
-import type { RenderContext } from '../resolve/RenderContext';
-import { textToHtml } from '../adapter/textToHtml';
+import type { RenderContext } from './RenderContext';
+import { textToHtml } from './textSerializer';
 import type { Table, TableCell as OutCell, Border } from '../adapter/types';
 
 const PX_TO_PT = 0.75;

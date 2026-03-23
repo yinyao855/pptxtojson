@@ -4,7 +4,7 @@
  */
 
 import type { ChartNodeData } from '../model/nodes/ChartNode';
-import type { RenderContext } from '../resolve/RenderContext';
+import type { RenderContext } from './RenderContext';
 import type { ChartType, CommonChart, ScatterChart, ChartItem, ChartValue } from '../adapter/types';
 
 const PX_TO_PT = 0.75;
