@@ -9,7 +9,7 @@ import { getPresetShapePath } from '../shapes/presets';
 import { renderCustomGeometry } from '../shapes/customGeometry';
 import { resolveShapeFill } from './fillMapper';
 import { lineStyleToBorder } from './borderMapper';
-import { textToHtml } from './textSerializer';
+import { renderTextBody } from './textSerializer';
 import type { Shape, Text, Fill } from '../adapter/types';
 
 const PX_TO_PT = 0.75;
@@ -61,7 +61,7 @@ export function shapeToElement(
     border: { borderColor: '#000000', borderWidth: 0, borderType: 'solid' as const },
     borderStrokeDasharray: '',
   };
-  const content = node.textBody ? textToHtml(ctx, node.textBody, node.placeholder) : '';
+  const content = node.textBody ? renderTextBody(node.textBody, node.placeholder, ctx) : '';
   const hasContent = hasVisibleText(node.textBody);
   const bodyPr = node.textBody?.bodyProperties;
   const vAlign = bodyPr?.attr ? getVAlign(bodyPr) : 'top';

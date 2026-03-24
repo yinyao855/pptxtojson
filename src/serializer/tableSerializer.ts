@@ -5,7 +5,7 @@
 
 import type { TableNodeData } from '../model/nodes/TableNode';
 import type { RenderContext } from './RenderContext';
-import { textToHtml } from './textSerializer';
+import { renderTextBody } from './textSerializer';
 import type { Table, TableCell as OutCell, Border } from '../adapter/types';
 
 const PX_TO_PT = 0.75;
@@ -34,7 +34,10 @@ export function tableToElement(
   const data: OutCell[][] = node.rows.map((row) =>
     row.cells.map((cell): OutCell => {
       const text = cell.textBody
-        ? textToHtml(ctx, cell.textBody).replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim()
+        ? renderTextBody(cell.textBody, undefined, ctx)
+            .replace(/<[^>]+>/g, ' ')
+            .replace(/\s+/g, ' ')
+            .trim()
         : '';
       return {
         text,
