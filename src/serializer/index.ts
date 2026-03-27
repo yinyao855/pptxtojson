@@ -19,7 +19,7 @@ export {
   renderBgPr as bgPrToFill,
   renderBgRef as bgRefToFill,
 } from './backgroundSerializer';
-export { shapeToElement } from './shapeSerializer';
+export { renderShape, shapeToElement } from './shapeSerializer';
 export { pictureToElement } from './imageSerializer';
 export { tableToElement } from './tableSerializer';
 export { chartToElement } from './chartSerializer';
