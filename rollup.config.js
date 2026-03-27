@@ -18,17 +18,14 @@ export default {
       file: 'dist/index.umd.js',
       format: 'umd',
       name: 'pptxtojson-pro',
-      sourcemap: true,
     },
     {
       file: 'dist/index.cjs',
       format: 'cjs',
-      sourcemap: true,
     },
     {
       file: 'dist/index.js',
       format: 'es',
-      sourcemap: true,
     },
   ],
   plugins: [
