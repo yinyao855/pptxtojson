@@ -1,6 +1,6 @@
 {
-	"name": "pptxtojson",
-	"version": "1.12.1",
+	"name": "pptxtojson-pro",
+	"version": "0.1.0",
 	"description": "A javascript tool for parsing .pptx file",
 	"type": "module",
 	"main": "./dist/index.cjs",
@@ -13,17 +13,17 @@
 		"lint": "eslint src --ext .js,.jsx,.ts,.tsx",
 		"transvert": "node scripts/transvert.js"
 	},
-	"author": "pipipi_pikachu@163.com",
+	"author": "yinyaohh@163.com",
 	"repository": {
 		"type": "git",
-		"url": "https://github.com/pipipi-pikachu/pptxtojson"
+		"url": "https://github.com/yinyao855/pptxtojson-pro"
 	},
 	"keywords": [
 		"ppt",
 		"pptx",
 		"json"
 	],
-	"homepage": "https://github.com/pipipi-pikachu/pptxtojson",
+	"homepage": "https://github.com/yinyao855/pptxtojson-pro",
 	"license": "MIT",
 	"publishConfig": {
 		"registry": "https://registry.npmjs.org"
