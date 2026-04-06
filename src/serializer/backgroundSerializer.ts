@@ -7,7 +7,7 @@ import type { RenderContext } from './RenderContext';
 import { resolveColor, resolveGradientFill, type GradientFillData } from './StyleResolver';
 import { hexToRgb, rgbToHex } from '../utils/color';
 import type { RelEntry } from '../parser/RelParser';
-import { encodeMediaForWebDisplay } from '../utils/mediaWebConvert';
+import { resolveMediaToUrl } from '../utils/mediaWebConvert';
 import type { Fill, GradientFill } from '../adapter/types';
 import { resolveMediaPath } from '../utils/media';
 
@@ -126,8 +126,7 @@ export function renderBgPr(bgPr: SafeXmlNode, ctx: RenderContext, rels?: Map<str
         const mediaPath = resolveMediaPath(rel.target);
         const data = ctx.presentation.media.get(mediaPath);
         if (data) {
-          const picBase64 = encodeMediaForWebDisplay(mediaPath, data);
-          // TODO: get opacity from alphaModFix
+          const picBase64 = resolveMediaToUrl(mediaPath, data, ctx.mediaMode, ctx.mediaUrlCache);
           return {
             type: 'image',
             value: { picBase64, opacity: 1 },

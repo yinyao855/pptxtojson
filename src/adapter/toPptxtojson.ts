@@ -8,6 +8,7 @@ import type { PresentationData } from '../model/Presentation';
 import type { PptxFiles } from '../parser/ZipParser';
 import type { Output, Slide, Size } from './types';
 import { slideToSlide } from '../serializer/slideSerializer';
+import type { MediaMode } from '../serializer/RenderContext';
 
 const PX_TO_PT = 0.75;
 
@@ -29,6 +30,7 @@ function getThemeColors(presentation: PresentationData): string[] {
 export function toPptxtojsonFormat(
   presentation: PresentationData,
   files: PptxFiles,
+  mediaMode: MediaMode = 'base64',
 ): Output {
   const size: Size = {
     width: pxToPt(presentation.width),
@@ -36,7 +38,7 @@ export function toPptxtojsonFormat(
   };
   const themeColors = getThemeColors(presentation);
   const slides: Slide[] = presentation.slides.map((slide) =>
-    slideToSlide(presentation, slide, files),
+    slideToSlide(presentation, slide, files, mediaMode),
   );
   return {
     slides,

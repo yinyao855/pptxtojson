@@ -9,6 +9,8 @@ import { MasterData } from '../model/Master';
 import { LayoutData } from '../model/Layout';
 import { SafeXmlNode } from '../parser/XmlParser';
 
+export type MediaMode = 'base64' | 'blob';
+
 export interface RenderContext {
   presentation: PresentationData;
   slide: SlideData;
@@ -24,6 +26,11 @@ export interface RenderContext {
   /** Fill node from parent group's grpSpPr, used to resolve `a:grpFill` in children. */
   groupFillNode?: SafeXmlNode;
   /**
+   * 'base64' — embed media as data URLs (default, portable JSON).
+   * 'blob'   — use blob URLs (shorter JSON, browser-only, good for development).
+   */
+  mediaMode: MediaMode;
+  /**
    * Navigation callback for shape-level hyperlink actions (action buttons, clickable shapes).
    * Called with target slide index (0-based) for `ppaction://hlinksldjump`,
    * or with a URL string for external links.
@@ -35,6 +42,7 @@ export function createRenderContext(
   presentation: PresentationData,
   slide: SlideData,
   mediaUrlCache?: Map<string, string>,
+  mediaMode: MediaMode = 'base64',
 ): RenderContext {
   // Resolve the chain: slide -> layout -> master -> theme
   const layoutPath = presentation.slideToLayout.get(slide.index) || '';
@@ -75,5 +83,6 @@ export function createRenderContext(
     masterPath,
     mediaUrlCache: mediaUrlCache ?? new Map(),
     colorCache: new Map(),
+    mediaMode,
   };
 }

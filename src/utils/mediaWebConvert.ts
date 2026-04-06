@@ -6,7 +6,7 @@
 import UTIF from 'utif';
 import { parseEmfContent } from './emfParser';
 import { rgbaToPngDataUrl } from './rgbaToPng';
-import { getMimeType, toDataUrl } from './media';
+import { getMimeType, toDataUrl, getOrCreateBlobUrl } from './media';
 
 type UtifPage = {
   width: number;
@@ -97,4 +97,22 @@ export function encodeMediaForWebDisplay(mediaPath: string, data: Uint8Array): s
 
   const mime = getMimeType(mediaPath);
   return toDataUrl(arrayBufferToBase64(data), mime);
+}
+
+/**
+ * Resolve media bytes to a URL string according to the given mode.
+ * - 'base64': data URL via `encodeMediaForWebDisplay` (portable, but verbose).
+ * - 'blob':   blob URL via `getOrCreateBlobUrl` (compact, browser-only).
+ */
+export function resolveMediaToUrl(
+  mediaPath: string,
+  data: Uint8Array | ArrayBuffer,
+  mode: 'base64' | 'blob',
+  cache: Map<string, string>,
+): string {
+  if (mode === 'blob') {
+    return getOrCreateBlobUrl(mediaPath, data, cache);
+  }
+  const bytes = data instanceof Uint8Array ? data : new Uint8Array(data);
+  return encodeMediaForWebDisplay(mediaPath, bytes);
 }

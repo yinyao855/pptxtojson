@@ -23,7 +23,7 @@ import { emuToPt } from '../parser/units';
 import { hexToRgb, rgbToHex } from '../utils/color';
 import { SafeXmlNode } from '../parser/XmlParser';
 import { resolveRelTarget } from '../parser/RelParser';
-import { encodeMediaForWebDisplay } from '../utils/mediaWebConvert';
+import { resolveMediaToUrl } from '../utils/mediaWebConvert';
 import { isAllowedExternalUrl } from '../utils/urlSafety';
 import { lineStyleToBorder, type BorderResult } from './borderMapper';
 import type { AutoFit, Fill, GradientFill, ImageFill, Shadow, Shape, Text } from '../adapter/types';
@@ -53,7 +53,7 @@ function resolveShapeBlipUrl(blipFill: SafeXmlNode, ctx: RenderContext): string 
   const mediaPath = resolveRelTarget(basePath, rel.target);
   const data = ctx.presentation.media.get(mediaPath);
   if (!data) return null;
-  return encodeMediaForWebDisplay(mediaPath, data);
+  return resolveMediaToUrl(mediaPath, data, ctx.mediaMode, ctx.mediaUrlCache);
 }
 
 // ---------------------------------------------------------------------------

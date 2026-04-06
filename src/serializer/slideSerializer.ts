@@ -12,7 +12,7 @@ import { parseGroupNode } from '../model/nodes/GroupNode';
 import { parseTableNode } from '../model/nodes/TableNode';
 import type { PresentationData } from '../model/Presentation';
 import type { PptxFiles } from '../parser/ZipParser';
-import { createRenderContext } from './RenderContext';
+import { createRenderContext, type MediaMode } from './RenderContext';
 import { resolveSlideFill } from './backgroundSerializer';
 import { shapeToElement } from './shapeSerializer';
 import { pictureToElement } from './imageSerializer';
@@ -191,9 +191,10 @@ export function slideToSlide(
   presentation: PresentationData,
   slide: SlideData,
   files: PptxFiles,
+  mediaMode: MediaMode = 'base64',
 ): Slide {
   // Create render context (resolves slide -> layout -> master -> theme chain)
-  const ctx = createRenderContext(presentation, slide);
+  const ctx = createRenderContext(presentation, slide, undefined, mediaMode);
 
   // Render background
   const fill = resolveSlideFill(ctx);

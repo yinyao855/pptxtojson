@@ -6,22 +6,30 @@
 import { parseZip } from './parser/ZipParser'
 import { buildPresentation } from './model/Presentation'
 import { toPptxtojsonFormat } from './adapter/toPptxtojson'
+import { initDOMParser } from './parser/XmlParser'
 import type { Output } from './adapter/types'
-import { serializePresentation } from './export/serializePresentation'
+import type { MediaMode } from './serializer/RenderContext'
+
+export interface ParseOptions {
+  /**
+   * 'base64' — embed media as data:… URLs (default, portable, large JSON).
+   * 'blob'   — use blob: URLs (compact JSON, browser-only, good for development).
+   */
+  mediaMode?: MediaMode
+}
 
 /**
  * Parse a .pptx file (ArrayBuffer) and return pptxtojson/PPTist format.
  * All dimensions in output are in pt.
  */
-export async function parse(buffer: ArrayBuffer): Promise<Output> {
+export async function parse(buffer: ArrayBuffer, options?: ParseOptions): Promise<Output> {
   const files = await parseZip(buffer)
   const presentation = buildPresentation(files)
-  const serializedPresentation = serializePresentation(presentation)
-  console.log(serializedPresentation)
-  return toPptxtojsonFormat(presentation, files)
+  return toPptxtojsonFormat(presentation, files, options?.mediaMode ?? 'base64')
 }
 
-export { parseZip, buildPresentation, toPptxtojsonFormat }
+export { parseZip, buildPresentation, toPptxtojsonFormat, initDOMParser }
 export type { Output, Slide, Element } from './adapter/types'
 export type { PptxFiles } from './parser/ZipParser'
 export type { PresentationData } from './model/Presentation'
+export type { MediaMode } from './serializer/RenderContext'

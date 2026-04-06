@@ -13,6 +13,7 @@ const onwarn = (warning) => {
 export default {
   input: 'src/index.ts',
   onwarn,
+  external: ['@xmldom/xmldom'],
   output: [
     {
       file: 'dist/index.umd.js',

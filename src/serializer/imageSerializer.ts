@@ -5,10 +5,10 @@
 import type { PicNodeData } from '../model/nodes/PicNode';
 import type { RenderContext } from './RenderContext';
 import { SafeXmlNode } from '../parser/XmlParser';
-import { encodeMediaForWebDisplay } from '../utils/mediaWebConvert';
+import { resolveMediaToUrl } from '../utils/mediaWebConvert';
 import { lineStyleToBorder } from './borderMapper';
 import type { Image, Video, Audio } from '../adapter/types';
-import { getOrCreateBlobUrl, resolveMediaPath } from '../utils/media';
+import { resolveMediaPath } from '../utils/media';
 import { isAllowedExternalUrl } from '../utils/urlSafety';
 
 const PX_TO_PT = 0.75;
@@ -216,7 +216,7 @@ function resolveMediaUrl(rId: string | undefined, ctx: RenderContext): string | 
   const data = ctx.presentation.media.get(mediaPath);
   if (!data) return undefined;
 
-  return getOrCreateBlobUrl(mediaPath, data, ctx.mediaUrlCache);
+  return resolveMediaToUrl(mediaPath, data, ctx.mediaMode, ctx.mediaUrlCache);
 }
 
 /**
@@ -239,7 +239,7 @@ function renderVideo(
       const mediaPath = resolveMediaPath(rel.target);
       const data = ctx.presentation.media.get(mediaPath);
       if (data && !isUnsupportedFormat(mediaPath)) {
-        posterUrl = getOrCreateBlobUrl(mediaPath, data, ctx.mediaUrlCache);
+        posterUrl = resolveMediaToUrl(mediaPath, data, ctx.mediaMode, ctx.mediaUrlCache);
       }
     }
   }
@@ -305,9 +305,7 @@ function renderImage(
     return buildImage(node, ctx, order, box, src, undefined);
   }
 
-  const bytes = data instanceof Uint8Array ? data : new Uint8Array(data);
-
-  src = encodeMediaForWebDisplay(mediaPath, bytes);
+  src = resolveMediaToUrl(mediaPath, data, ctx.mediaMode, ctx.mediaUrlCache);
   return buildImage(node, ctx, order, box, src, buildImageFilters(node));
 }
 
