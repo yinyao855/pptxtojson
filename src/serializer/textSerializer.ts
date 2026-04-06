@@ -150,7 +150,7 @@ function mergeParagraphProps(target: MergedParagraphStyle, pPr: SafeXmlNode): vo
       const val = spcPct.numAttr('val');
       if (val !== undefined) {
         // OOXML 100000 → CSS unitless 1.0; OOXML 120000 → CSS 1.2
-        target.lineHeight = `${(val / 100000).toFixed(3)}`;
+        target.lineHeight = `${parseFloat((val / 100000).toFixed(4))}`;
       }
     }
     const spcPts = lnSpc.child('spcPts');
@@ -653,9 +653,9 @@ export function renderTextBody(
         const parsed = parseFloat(merged.lineHeight);
         if (!isNaN(parsed)) {
           if (merged.lineHeight.includes('pt')) {
-            effectiveLineHeight = `${(parsed * (1 - lnSpcReduction)).toFixed(2)}pt`;
+            effectiveLineHeight = `${parseFloat((parsed * (1 - lnSpcReduction)).toFixed(2))}pt`;
           } else {
-            effectiveLineHeight = `${(parsed * (1 - lnSpcReduction)).toFixed(3)}`;
+            effectiveLineHeight = `${parseFloat((parsed * (1 - lnSpcReduction)).toFixed(4))}`;
           }
         }
       }
@@ -673,14 +673,14 @@ export function renderTextBody(
       if (sz !== undefined) effectiveFontSize = sz / 100;
     }
 
-    if (merged.spaceBefore !== undefined) {
+    if (merged.spaceBefore !== undefined && merged.spaceBefore !== 0) {
       paraCssParts.push(`margin-top: ${merged.spaceBefore}pt`);
-    } else if (merged.spaceBeforePct !== undefined) {
+    } else if (merged.spaceBeforePct !== undefined && merged.spaceBeforePct !== 0) {
       paraCssParts.push(`margin-top: ${merged.spaceBeforePct * effectiveFontSize}pt`);
     }
-    if (merged.spaceAfter !== undefined) {
+    if (merged.spaceAfter !== undefined && merged.spaceAfter !== 0) {
       paraCssParts.push(`margin-bottom: ${merged.spaceAfter}pt`);
-    } else if (merged.spaceAfterPct !== undefined) {
+    } else if (merged.spaceAfterPct !== undefined && merged.spaceAfterPct !== 0) {
       paraCssParts.push(`margin-bottom: ${merged.spaceAfterPct * effectiveFontSize}pt`);
     }
 
@@ -719,10 +719,10 @@ export function renderTextBody(
     }
     const useLineWrappers = !!(merged.lineHeightAbsolute && hasLineBreaks && effectiveLineHeight);
 
-    const paraCss = paraCssParts.join('; ');
+    const paraCss = paraCssParts.join(';');
     const openTag = useLineWrappers
-      ? `<div${paraCss ? ` style="${escapeHtmlAttr(paraCss)}"` : ''}>`
-      : `<p${paraCss ? ` style="${escapeHtmlAttr(paraCss)}"` : ''}>`;
+      ? `<div${paraCss ? ` style="${paraCss};"` : ''}>`
+      : `<p${paraCss ? ` style="${paraCss};"` : ''}>`;
     const closeTag = useLineWrappers ? '</div>' : '</p>';
     html += openTag;
 
@@ -761,9 +761,9 @@ export function renderTextBody(
       const bColor =
         bulletColor ?? options?.fontRefColor ?? options?.cellTextColor ?? '#000000';
       const bFont = merged.bulletFont
-        ? `font-family: "${merged.bulletFont.replace(/"/g, '\\"')}"; `
+        ? `font-family: ${merged.bulletFont};`
         : '';
-      html += `<span style="${escapeHtmlAttr(`${bFont}color: ${bColor}`)}">${escapeHtml(bulletPrefix)} </span>`;
+      html += `<span style="${bFont}color: ${bColor};">${escapeHtml(bulletPrefix)} </span>`;
     }
 
     // ---- Render runs ----
@@ -775,8 +775,7 @@ export function renderTextBody(
     let currentLineDivOpen = false;
     const openLineWrapper = () => {
       if (!useLineWrappers || !effectiveLineHeight) return;
-      const h = escapeHtmlAttr(effectiveLineHeight);
-      html += `<div style="height: ${h}; overflow: visible">`;
+      html += `<div style="height: ${effectiveLineHeight};overflow: visible">`;
       currentLineDivOpen = true;
     };
     const closeLineWrapper = () => {
@@ -790,8 +789,22 @@ export function renderTextBody(
       openLineWrapper();
     }
 
+    // Merge consecutive runs with identical style strings into a single <span>,
+    // matching pptxtojson's compact HTML output for better pptist compatibility.
+    let prevStyleStr: string | null = null;
+    let prevIsLink = false;
+    let accumulatedText = '';
+
+    const flushAccumulatedRun = () => {
+      if (!accumulatedText || prevStyleStr === null) return;
+      html += `<span style="${prevStyleStr}">${accumulatedText}</span>`;
+      accumulatedText = '';
+    };
+
     for (const run of paragraph.runs) {
       if (run.text === '\n') {
+        flushAccumulatedRun();
+        prevStyleStr = null;
         if (useLineWrappers) {
           closeLineWrapper();
           openLineWrapper();
@@ -815,8 +828,6 @@ export function renderTextBody(
       }
 
       // Fallback: if no color resolved yet, check the shape's lstStyle defRPr.
-      // This handles the case where paragraph pPr has an empty <a:defRPr/> that
-      // overwrites the lstStyle's defRPr (which may carry solidFill color).
       if (runStyle.color === undefined && textBody.listStyle) {
         const lstStyleLevel = findStyleAtLevel(textBody.listStyle, level);
         if (lstStyleLevel.exists()) {
@@ -832,18 +843,26 @@ export function renderTextBody(
       }
 
       const inner = formatRunTextForHtml(run.text ?? '');
-      const tabStyleSuffix = run.text?.includes('\t') ? '; white-space: pre' : '';
+      const tabStyleSuffix = run.text?.includes('\t') ? ';white-space: pre' : '';
 
-      // Apply run styles (with normAutofit fontScale) — mirrors element.style.* block in TextRenderer
       const styleStr = runStylesToCssString(runStyle, run, fontScale, options, ctx) + tabStyleSuffix;
+      const isLink = !!runStyle.hlinkClick;
 
-      if (runStyle.hlinkClick) {
-        const href = escapeHtmlAttr(runStyle.hlinkClick);
-        html += `<a href="${href}" target="_blank" rel="noopener noreferrer" style="${escapeHtmlAttr(styleStr)}">${inner}</a>`;
+      if (isLink) {
+        flushAccumulatedRun();
+        prevStyleStr = null;
+        const href = escapeHtmlAttr(runStyle.hlinkClick!);
+        html += `<a href="${href}" target="_blank" rel="noopener noreferrer" style="${styleStr}">${inner}</a>`;
+      } else if (prevStyleStr === styleStr && !prevIsLink) {
+        accumulatedText += inner;
       } else {
-        html += `<span style="${escapeHtmlAttr(styleStr)}">${inner}</span>`;
+        flushAccumulatedRun();
+        prevStyleStr = styleStr;
+        accumulatedText = inner;
       }
+      prevIsLink = isLink;
     }
+    flushAccumulatedRun();
 
     if (useLineWrappers) {
       closeLineWrapper();
@@ -978,12 +997,12 @@ function runStylesToCssString(
     ? runStyle.fontFamily
     : (options?.cellTextFontFamily ?? runStyle.fontFamily);
   if (effectiveFont) {
-    parts.push(`font-family: "${effectiveFont.replace(/"/g, '\\"')}"`);
+    parts.push(`font-family: ${effectiveFont}`);
   } else {
     // Fallback to theme minor font
     const fallback = ctx.theme.minorFont.latin || ctx.theme.minorFont.ea;
     if (fallback) {
-      parts.push(`font-family: "${fallback.replace(/"/g, '\\"')}"`);
+      parts.push(`font-family: ${fallback}`);
     }
   }
 
@@ -1015,5 +1034,5 @@ function runStylesToCssString(
     }
   }
 
-  return parts.join('; ');
+  return parts.join(';') + (parts.length ? ';' : '');
 }
