@@ -345,8 +345,10 @@ function computeAutoFit(textBody: TextBody | undefined): AutoFit | undefined {
   const norm = bp.child('normAutofit');
   if (norm.exists()) {
     const fs = norm.numAttr('fontScale');
-    const fontScale = fs !== undefined ? fs / 100000 : 1;
-    return { type: 'text', fontScale };
+    if (fs !== undefined) {
+      return { type: 'text', fontScale: fs / 1000 };
+    }
+    return { type: 'text' };
   }
   return undefined;
 }

@@ -566,19 +566,6 @@ export function renderTextBody(
   const category = getPlaceholderCategory(placeholder);
   let bulletCounter = 0;
 
-  // Parse normAutofit from bodyPr (font scaling + line spacing reduction)
-  let fontScale = 1;
-  let lnSpcReduction = 0;
-  if (textBody.bodyProperties) {
-    const normAutofit = textBody.bodyProperties.child('normAutofit');
-    if (normAutofit.exists()) {
-      const fs = normAutofit.numAttr('fontScale');
-      if (fs !== undefined) fontScale = fs / 100000; // 100000 = 100%
-      const lsr = normAutofit.numAttr('lnSpcReduction');
-      if (lsr !== undefined) lnSpcReduction = lsr / 100000; // e.g., 20000 = 20%
-    }
-  }
-
   let html = '';
 
   for (const paragraph of textBody.paragraphs) {
@@ -646,20 +633,8 @@ export function renderTextBody(
     if (merged.textIndent !== undefined) {
       paraCssParts.push(`text-indent: ${merged.textIndent}px`);
     }
-    // Compute effective line-height (with optional lnSpcReduction from normAutofit)
-    let effectiveLineHeight = merged.lineHeight;
     if (merged.lineHeight) {
-      if (lnSpcReduction > 0) {
-        const parsed = parseFloat(merged.lineHeight);
-        if (!isNaN(parsed)) {
-          if (merged.lineHeight.includes('pt')) {
-            effectiveLineHeight = `${parseFloat((parsed * (1 - lnSpcReduction)).toFixed(2))}pt`;
-          } else {
-            effectiveLineHeight = `${parseFloat((parsed * (1 - lnSpcReduction)).toFixed(4))}`;
-          }
-        }
-      }
-      paraCssParts.push(`line-height: ${effectiveLineHeight!}`);
+      paraCssParts.push(`line-height: ${merged.lineHeight}`);
     }
     // Determine effective font size for percentage-based spacing
     // Use defRPr or first run's font size, fallback to 12pt
@@ -717,7 +692,7 @@ export function renderTextBody(
       const defaultTabPx = 96; // 914400 EMU at 96 dpi
       paraCssParts.push(`tab-size: ${defaultTabPx}px`);
     }
-    const useLineWrappers = !!(merged.lineHeightAbsolute && hasLineBreaks && effectiveLineHeight);
+    const useLineWrappers = !!(merged.lineHeightAbsolute && hasLineBreaks && merged.lineHeight);
 
     const paraCss = paraCssParts.join(';');
     const openTag = useLineWrappers
@@ -774,8 +749,8 @@ export function renderTextBody(
 
     let currentLineDivOpen = false;
     const openLineWrapper = () => {
-      if (!useLineWrappers || !effectiveLineHeight) return;
-      html += `<div style="height: ${effectiveLineHeight};overflow: visible">`;
+      if (!useLineWrappers || !merged.lineHeight) return;
+      html += `<div style="height: ${merged.lineHeight};overflow: visible">`;
       currentLineDivOpen = true;
     };
     const closeLineWrapper = () => {
@@ -845,7 +820,7 @@ export function renderTextBody(
       const inner = formatRunTextForHtml(run.text ?? '');
       const tabStyleSuffix = run.text?.includes('\t') ? ';white-space: pre' : '';
 
-      const styleStr = runStylesToCssString(runStyle, run, fontScale, options, ctx) + tabStyleSuffix;
+      const styleStr = runStylesToCssString(runStyle, run, options, ctx) + tabStyleSuffix;
       const isLink = !!runStyle.hlinkClick;
 
       if (isLink) {
@@ -877,7 +852,7 @@ export function renderTextBody(
       if (lastRun?.text === '\n') {
         const epSz = paragraph.endParaRPr.numAttr('sz');
         if (epSz !== undefined) {
-          html += `<span style="font-size: ${((epSz / 100) * fontScale).toFixed(4)}pt">&#x200B;</span>`;
+          html += `<span style="font-size: ${(epSz / 100).toFixed(4)}pt">&#x200B;</span>`;
         }
       }
     }
@@ -892,14 +867,12 @@ export function renderTextBody(
 function runStylesToCssString(
   runStyle: MergedRunStyle,
   run: TextRun,
-  fontScale: number,
   options: RenderTextBodyOptions | undefined,
   ctx: RenderContext,
 ): string {
-  // Default to 12pt if no font size specified at any inheritance level
   const fontSize = runStyle.fontSize || 12;
   const parts: string[] = [];
-  parts.push(`font-size: ${fontSize * fontScale}pt`);
+  parts.push(`font-size: ${fontSize}pt`);
 
   // Bold: explicit run rPr > cellTextBold (table style tcTxStyle) > inherited styles
   const hasExplicitRunBold = run.properties?.attr('b') !== undefined;
@@ -1012,7 +985,7 @@ function runStylesToCssString(
   }
   // Kerning (a:kern): val = min font size (pt) to kern; 0 = always kern
   if (runStyle.kern !== undefined) {
-    const effectivePt = (runStyle.fontSize || 12) * fontScale;
+    const effectivePt = runStyle.fontSize || 12;
     parts.push(`font-kerning: ${effectivePt >= runStyle.kern ? 'normal' : 'none'}`);
   }
 
@@ -1030,7 +1003,7 @@ function runStylesToCssString(
     parts.push(`vertical-align: ${shiftPct}%`);
     // Reduce font size for super/subscript
     if (Math.abs(shiftPct) >= 20) {
-      parts.push(`font-size: ${fontSize * fontScale * 0.65}pt`);
+      parts.push(`font-size: ${fontSize * 0.65}pt`);
     }
   }
 
