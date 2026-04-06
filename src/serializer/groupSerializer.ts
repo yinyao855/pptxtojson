@@ -1,6 +1,9 @@
 /**
  * Serializes GroupNodeData to pptxtojson Group element.
  * Recursively serializes children via nodeToElement; flattens nested groups into elements.
+ *
+ * Child positions are output relative to the group (consistent with pptxtojson).
+ * Applies chOff/chExt coordinate space transformation and scaling.
  */
 
 import type { GroupNodeData } from '../model/nodes/GroupNode';
@@ -10,7 +13,6 @@ import type { RenderContext } from './RenderContext';
 import type { PptxFiles } from '../parser/ZipParser';
 import type { Group, Element, BaseElement } from '../adapter/types';
 
-// Type guard for Group (Element = BaseElement | Group)
 function isGroup(e: Element): e is Group {
   return (e as Group).type === 'group';
 }
@@ -21,17 +23,8 @@ function pxToPt(px: number): number {
   return Number((px * PX_TO_PT).toFixed(4));
 }
 
-/**
- * Flatten a group into BaseElement[] with positions in parent (slide) space.
- * Offsets each element by (baseLeft + group.left, baseTop + group.top).
- */
-function flattenGroupInto(group: Group, baseLeft: number, baseTop: number, out: BaseElement[]): void {
-  const offsetLeft = baseLeft + group.left;
-  const offsetTop = baseTop + group.top;
-  for (const el of group.elements) {
-    const e = el as BaseElement & { left: number; top: number };
-    out.push({ ...e, left: offsetLeft + e.left, top: offsetTop + e.top } as BaseElement);
-  }
+function toFixed(n: number): number {
+  return Number(n.toFixed(4));
 }
 
 export type NodeToElement = (
@@ -41,11 +34,6 @@ export type NodeToElement = (
   files?: PptxFiles,
 ) => Element;
 
-/**
- * Serialize group node to Group element.
- * Children are parsed with parseChildNode and serialized with nodeToElement.
- * Nested groups are flattened so Group.elements is BaseElement[].
- */
 export function groupToElement(
   node: GroupNodeData,
   ctx: RenderContext,
@@ -58,28 +46,52 @@ export function groupToElement(
   const top = pxToPt(node.position.y);
   const width = pxToPt(node.size.w);
   const height = pxToPt(node.size.h);
+
+  const chOffX = pxToPt(node.childOffset.x);
+  const chOffY = pxToPt(node.childOffset.y);
+  const chExtW = pxToPt(node.childExtent.w);
+  const chExtH = pxToPt(node.childExtent.h);
+
+  const ws = chExtW > 0 ? width / chExtW : 1;
+  const hs = chExtH > 0 ? height / chExtH : 1;
+
   const rels = ctx.slide.rels;
   const slidePath = ctx.slide.slidePath;
   const diagramDrawings = files?.diagramDrawings;
   const elements: BaseElement[] = [];
   let idx = 0;
+
   for (const childXml of node.children) {
     const childNode = parseChildNode(childXml, rels, slidePath, diagramDrawings);
     if (childNode) {
       const el = nodeToElement(childNode, ctx, idx, files);
       if (isGroup(el)) {
-        flattenGroupInto(el, left, top, elements);
+        const gLeft = toFixed((el.left - chOffX) * ws);
+        const gTop = toFixed((el.top - chOffY) * hs);
+        for (const child of el.elements) {
+          const c = child as BaseElement & { left: number; top: number; width: number; height: number };
+          elements.push({
+            ...c,
+            left: toFixed(gLeft + c.left * ws),
+            top: toFixed(gTop + c.top * hs),
+            width: toFixed(c.width * ws),
+            height: toFixed(c.height * hs),
+          } as BaseElement);
+        }
       } else {
-        const be = el as BaseElement & { left: number; top: number };
+        const be = el as BaseElement & { left: number; top: number; width: number; height: number };
         elements.push({
           ...be,
-          left: left + be.left,
-          top: top + be.top,
+          left: toFixed((be.left - chOffX) * ws),
+          top: toFixed((be.top - chOffY) * hs),
+          width: toFixed(be.width * ws),
+          height: toFixed(be.height * hs),
         } as BaseElement);
       }
       idx++;
     }
   }
+
   return {
     type: 'group',
     left,
