@@ -16,7 +16,7 @@ import {
   resolveThemeFillReference,
   type GradientFillData,
 } from './StyleResolver';
-import { renderTextBody, type RenderTextBodyOptions } from './textSerializer';
+import { renderTextBody, findPlaceholderNode, type RenderTextBodyOptions } from './textSerializer';
 import { renderCustomGeometry } from '../shapes/customGeometry';
 import { getPresetShapePath, getMultiPathPreset, type PresetSubPath } from '../shapes/presets';
 import { emuToPt } from '../parser/units';
@@ -351,6 +351,76 @@ function computeAutoFit(textBody: TextBody | undefined): AutoFit | undefined {
   return undefined;
 }
 
+/**
+ * Resolve fill from layout or master placeholder when the slide shape has no explicit fill.
+ * Checks if the shape's spPr explicitly declares <a:noFill/> — if so, returns null (transparent).
+ * Otherwise falls back to layout placeholder spPr, then master placeholder spPr.
+ */
+function resolveInheritedPlaceholderFill(
+  placeholder: PlaceholderInfo,
+  slideSpPr: SafeXmlNode,
+  ctx: RenderContext,
+): { fillCss: string; gradientFillData: GradientFillData | null } | null {
+  // If shape explicitly opted out of fill, respect it
+  if (slideSpPr.child('noFill').exists()) return null;
+
+  // Try layout placeholder first, then master placeholder
+  const sources: SafeXmlNode[] = [];
+  const layoutPh = findPlaceholderNode(
+    ctx.layout.placeholders.map((e) => e.node),
+    placeholder,
+  );
+  if (layoutPh) sources.push(layoutPh);
+  const masterPh = findPlaceholderNode(ctx.master.placeholders, placeholder);
+  if (masterPh) sources.push(masterPh);
+
+  for (const phNode of sources) {
+    const phSpPr = phNode.child('spPr');
+    if (!phSpPr.exists()) continue;
+
+    // Check solidFill
+    const solidFill = phSpPr.child('solidFill');
+    if (solidFill.exists()) {
+      const colorChild = solidFill.child('srgbClr').exists()
+        ? solidFill.child('srgbClr')
+        : solidFill.child('schemeClr').exists()
+          ? solidFill.child('schemeClr')
+          : solidFill.child('scrgbClr').exists()
+            ? solidFill.child('scrgbClr')
+            : solidFill.child('sysClr').exists()
+              ? solidFill.child('sysClr')
+              : undefined;
+      if (colorChild?.exists()) {
+        return { fillCss: resolveColorToCss(colorChild, ctx), gradientFillData: null };
+      }
+    }
+
+    // Check gradFill
+    const gradFill = phSpPr.child('gradFill');
+    if (gradFill.exists()) {
+      const css = resolveFill(phSpPr, ctx);
+      const gradData = resolveGradientFill(phSpPr, ctx);
+      if (css || gradData) return { fillCss: css, gradientFillData: gradData };
+    }
+
+    // Check blipFill (image fill)
+    const blipFill = phSpPr.child('blipFill');
+    if (blipFill.exists()) {
+      const css = resolveFill(phSpPr, ctx);
+      if (css) return { fillCss: css, gradientFillData: null };
+    }
+
+    // Check pattFill (pattern fill)
+    const pattFill = phSpPr.child('pattFill');
+    if (pattFill.exists()) {
+      const css = resolveFill(phSpPr, ctx);
+      if (css) return { fillCss: css, gradientFillData: null };
+    }
+  }
+
+  return null;
+}
+
 // ---------------------------------------------------------------------------
 // Shape Rendering → JSON (same structure as ShapeRenderer.renderShape)
 // ---------------------------------------------------------------------------
@@ -474,6 +544,15 @@ export function renderShape(node: ShapeNodeData, ctx: RenderContext, _order: num
     const resolvedThemeFill = resolveThemeFillReference(fillRef, ctx);
     fillCss = resolvedThemeFill.fillCss;
     if (!gradientFillData) gradientFillData = resolvedThemeFill.gradientFillData;
+  }
+  // Placeholder fill inheritance: when the slide shape has no explicit fill,
+  // inherit fill from the matching layout placeholder, then master placeholder.
+  if (!fillCss && !gradientFillData && node.placeholder) {
+    const phFill = resolveInheritedPlaceholderFill(node.placeholder, spPr, ctx);
+    if (phFill) {
+      fillCss = phFill.fillCss;
+      gradientFillData = phFill.gradientFillData;
+    }
   }
   if (isLineLike) {
     fillCss = '';

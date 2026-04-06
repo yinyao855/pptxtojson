@@ -57,7 +57,7 @@ function getPlaceholderCategory(
 /**
  * Find a placeholder node in a list by matching type and/or idx.
  */
-function findPlaceholderNode(
+export function findPlaceholderNode(
   placeholders: SafeXmlNode[],
   info: PlaceholderInfo,
 ): SafeXmlNode | undefined {
@@ -383,12 +383,12 @@ function mergeRunProps(target: MergedRunStyle, rPr: SafeXmlNode, ctx: RenderCont
  */
 function resolveThemeFont(typeface: string, ctx: RenderContext): string {
   if (typeface === '+mj-lt' || typeface === '+mj-ea' || typeface === '+mj-cs') {
-    const key = typeface.slice(3) as 'lt' | 'ea' | 'cs';
+    const key = typeface.slice(4) as 'lt' | 'ea' | 'cs';
     const mapping: Record<string, 'latin' | 'ea' | 'cs'> = { lt: 'latin', ea: 'ea', cs: 'cs' };
     return ctx.theme.majorFont[mapping[key] || 'latin'] || typeface;
   }
   if (typeface === '+mn-lt' || typeface === '+mn-ea' || typeface === '+mn-cs') {
-    const key = typeface.slice(3) as 'lt' | 'ea' | 'cs';
+    const key = typeface.slice(4) as 'lt' | 'ea' | 'cs';
     const mapping: Record<string, 'latin' | 'ea' | 'cs'> = { lt: 'latin', ea: 'ea', cs: 'cs' };
     return ctx.theme.minorFont[mapping[key] || 'latin'] || typeface;
   }
