@@ -4,12 +4,11 @@
 
 import type { SafeXmlNode } from '../parser/XmlParser';
 import type { RenderContext } from './RenderContext';
-import { resolveColor, resolveGradientFill } from './StyleResolver';
+import { resolveColor, resolveGradientFill, type GradientFillData } from './StyleResolver';
 import { hexToRgb, rgbToHex } from '../utils/color';
 import type { RelEntry } from '../parser/RelParser';
 import { encodeMediaForWebDisplay } from '../utils/mediaWebConvert';
-import { gradientFillDataToValue } from './fillMapper';
-import type { Fill } from '../adapter/types';
+import type { Fill, GradientFill } from '../adapter/types';
 import { resolveMediaPath } from '../utils/media';
 
 function defaultFill(): Fill {
@@ -92,6 +91,29 @@ export function renderBgPr(bgPr: SafeXmlNode, ctx: RenderContext, rels?: Map<str
     return defaultFill();
   }
 
+  // pattFill (pattern background) — BackgroundRenderer falls through to resolveFill;
+  // here we resolve to PatternFill directly so the JSON consumer gets structured data.
+  const pattFill = bgPr.child('pattFill');
+  if (pattFill.exists()) {
+    const preset = pattFill.attr('prst') ?? 'solid';
+    let foregroundColor = '#000000';
+    let backgroundColor = '#ffffff';
+    const fgClr = pattFill.child('fgClr');
+    if (fgClr.exists()) {
+      const { color } = resolveColor(fgClr, ctx);
+      foregroundColor = ensureHex(color);
+    }
+    const bgClr = pattFill.child('bgClr');
+    if (bgClr.exists()) {
+      const { color } = resolveColor(bgClr, ctx);
+      backgroundColor = ensureHex(color);
+    }
+    return {
+      type: 'pattern',
+      value: { type: preset, foregroundColor, backgroundColor },
+    };
+  }
+
   // blipFill (image background)
   const blipFill = bgPr.child('blipFill');
   if (blipFill.exists()) {
@@ -140,4 +162,28 @@ export function renderBgRef(bgRef: SafeXmlNode, ctx: RenderContext): Fill {
     return { type: 'color', value: hex };
   }
   return defaultFill();
+}
+
+function ensureHex(color: string): string {
+  const s = color.trim();
+  if (s.startsWith('#')) return s;
+  return `#${s}`;
+}
+
+/** Convert GradientFillData to types.GradientFill.value (path, rot, colors). */
+export function gradientFillDataToValue(data: GradientFillData): GradientFill['value'] {
+  const path: GradientFill['value']['path'] =
+    data.type === 'linear'
+      ? 'line'
+      : data.pathType === 'rect'
+        ? 'rect'
+        : data.pathType === 'circle' || data.pathType === 'shape'
+          ? data.pathType
+          : 'circle';
+  const rot = data.type === 'linear' ? data.angle : 0;
+  const colors = data.stops.map((s) => ({
+    pos: `${s.position.toFixed(1)}%`,
+    color: ensureHex(s.color),
+  }));
+  return { path, rot, colors };
 }

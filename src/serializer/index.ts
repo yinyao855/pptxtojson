@@ -5,13 +5,6 @@
 
 export { createRenderContext, type RenderContext } from './RenderContext';
 export { renderTextBody, type RenderTextBodyOptions } from './textSerializer';
-export {
-  spPrToFill,
-  resolveShapeFill,
-  spPrHasExplicitFill,
-  gradientFillDataToValue,
-  type SpPrToFillOptions,
-} from './fillMapper';
 export { lineStyleToBorder, dashArrayForKind, type BorderResult } from './borderMapper';
 export { slideToSlide, nodeToElement } from './slideSerializer';
 export {

@@ -9,6 +9,7 @@ import { encodeMediaForWebDisplay } from '../utils/mediaWebConvert';
 import { lineStyleToBorder } from './borderMapper';
 import type { Image, Video, Audio } from '../adapter/types';
 import { getOrCreateBlobUrl, resolveMediaPath } from '../utils/media';
+import { isAllowedExternalUrl } from '../utils/urlSafety';
 
 const PX_TO_PT = 0.75;
 
@@ -30,6 +31,70 @@ function isUnsupportedFormat(path: string): boolean {
 function isEmfFormat(path: string): boolean {
   const ext = path.split('.').pop()?.toLowerCase() || '';
   return ext === 'emf';
+}
+
+/**
+ * Resolve preset geometry from spPr > prstGeom.
+ * Falls back to 'rect' when no explicit preset is specified —
+ * same as ImageRenderer which treats images as rectangular by default.
+ */
+function resolvePresetGeom(node: PicNodeData): string {
+  const spPr = node.source.child('spPr');
+  if (!spPr.exists()) return 'rect';
+  const prstGeom = spPr.child('prstGeom');
+  if (!prstGeom.exists()) return 'rect';
+  return prstGeom.attr('prst') ?? 'rect';
+}
+
+/**
+ * Resolve image-level hyperlink from hlinkClick on cNvPr.
+ * Mirrors link resolution logic in ShapeRenderer / ImageRenderer.
+ */
+function resolvePicLink(node: PicNodeData, ctx: RenderContext): string | undefined {
+  const h = node.hlinkClick;
+  if (!h) return undefined;
+  const { action, rId } = h;
+  if (action === 'ppaction://hlinksldjump' && rId) {
+    const rel = ctx.slide.rels.get(rId);
+    if (rel) {
+      const match = rel.target.match(/slide(\d+)\.xml/i);
+      if (match) return `#slide-${match[1]}`;
+    }
+  } else if (rId) {
+    const rel = ctx.slide.rels.get(rId);
+    if (rel && rel.targetMode === 'External' && isAllowedExternalUrl(rel.target)) {
+      return rel.target;
+    }
+  }
+  return undefined;
+}
+
+/**
+ * Resolve overall image opacity from OOXML blip alpha modifiers.
+ * Same logic as ImageRenderer.resolveBlipOpacity:
+ * - alphaModFix amt="N"
+ * - alphaMod val="N"
+ * - alphaOff val="N"
+ */
+function resolveBlipOpacity(blip: SafeXmlNode): number {
+  let alpha = 1;
+
+  const alphaModFix = blip.child('alphaModFix');
+  if (alphaModFix.exists()) {
+    alpha *= (alphaModFix.numAttr('amt') ?? 100000) / 100000;
+  }
+
+  const alphaMod = blip.child('alphaMod');
+  if (alphaMod.exists()) {
+    alpha *= (alphaMod.numAttr('val') ?? 100000) / 100000;
+  }
+
+  const alphaOff = blip.child('alphaOff');
+  if (alphaOff.exists()) {
+    alpha += (alphaOff.numAttr('val') ?? 0) / 100000;
+  }
+
+  return Math.max(0, Math.min(1, alpha));
 }
 
 /** OOXML fixed-point scale (100000 = 100%). */
@@ -268,7 +333,6 @@ function buildImage(
     node.crop &&
     (node.crop.top !== 0 || node.crop.bottom !== 0 || node.crop.left !== 0 || node.crop.right !== 0)
   ) {
-    // OOXML srcRect
     rect = {
       t: node.crop.top,
       b: node.crop.bottom,
@@ -276,6 +340,22 @@ function buildImage(
       r: node.crop.right,
     };
   }
+
+  const geom = resolvePresetGeom(node);
+  const link = resolvePicLink(node, ctx);
+
+  // Blip opacity (alphaModFix / alphaMod / alphaOff) — same as ImageRenderer.resolveBlipOpacity.
+  // When opacity < 1, ImageRenderer sets wrapper.style.opacity; here we store in filters.
+  const blipFillNode = node.source.child('blipFill');
+  const blipNode = blipFillNode.exists() ? blipFillNode.child('blip') : node.source.child('__none__');
+  const blipOpacity = blipNode.exists() ? resolveBlipOpacity(blipNode) : 1;
+
+  const mergedFilters: Image['filters'] = { ...filters };
+  if (blipOpacity < 1) {
+    // Store opacity as a filter; the consumer can apply CSS opacity or equivalent.
+    (mergedFilters as Record<string, number>).opacity = blipOpacity;
+  }
+  const hasFilters = Object.keys(mergedFilters).length > 0;
 
   return {
     type: 'image',
@@ -286,12 +366,13 @@ function buildImage(
     isFlipV: node.flipV,
     order,
     rect,
-    geom: 'rect',
+    geom,
     borderColor: borderResult.border.borderColor,
     borderWidth: borderResult.border.borderWidth,
     borderType: borderResult.border.borderType,
     borderStrokeDasharray: borderResult.borderStrokeDasharray || '',
-    ...(filters && Object.keys(filters).length > 0 ? { filters } : {}),
+    ...(hasFilters ? { filters: mergedFilters } : {}),
+    ...(link ? { link } : {}),
   };
 }
 
