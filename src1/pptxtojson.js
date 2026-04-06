@@ -16,7 +16,22 @@ import { getShapePath } from './shapePath'
 import { parseTransition, findTransitionNode } from './animation'
 import { getSmartArtTextData } from './diagram'
 
-export async function parse(file) {
+/**
+ * @param {ArrayBuffer} file
+ * @param {{ mediaMode?: 'base64' | 'blob' }} [options]
+ */
+function createBlobUrlSafe(arrayBuffer, mimeType) {
+  if (typeof URL !== 'undefined' && typeof Blob !== 'undefined' && URL.createObjectURL) {
+    return URL.createObjectURL(new Blob([arrayBuffer], { type: mimeType }))
+  }
+  const bytes = arrayBuffer instanceof Uint8Array ? arrayBuffer : new Uint8Array(arrayBuffer)
+  let binary = ''
+  for (let i = 0; i < bytes.length; i++) binary += String.fromCharCode(bytes[i])
+  return `data:${mimeType};base64,${btoa(binary)}`
+}
+
+export async function parse(file, options) {
+  const mediaMode = options?.mediaMode ?? 'base64'
   const slides = []
   
   const zip = await JSZip.loadAsync(file)
@@ -26,7 +41,7 @@ export async function parse(file) {
   const { themeContent, themeColors } = await getTheme(zip)
 
   for (const filename of filesInfo.slides) {
-    const singleSlide = await processSingleSlide(zip, filename, themeContent, defaultTextStyle)
+    const singleSlide = await processSingleSlide(zip, filename, themeContent, defaultTextStyle, mediaMode)
     slides.push(singleSlide)
   }
 
@@ -115,7 +130,7 @@ async function getTheme(zip) {
   return { themeContent, themeColors }
 }
 
-async function processSingleSlide(zip, sldFileName, themeContent, defaultTextStyle) {
+async function processSingleSlide(zip, sldFileName, themeContent, defaultTextStyle, mediaMode = 'base64') {
   const resName = sldFileName.replace('slides/slide', 'slides/_rels/slide') + '.rels'
   const resContent = await readXmlFile(zip, resName)
   let relationshipArray = resContent['Relationships']['Relationship']
@@ -318,6 +333,7 @@ async function processSingleSlide(zip, sldFileName, themeContent, defaultTextSty
     diagramResObj,
     diagramContent,
     defaultTextStyle,
+    mediaMode,
   }
   const layoutElements = await getLayoutElements(warpObj)
   const fill = await getSlideBackgroundFill(warpObj)
@@ -887,7 +903,9 @@ async function processPicNode(node, warpObj, source) {
   const mimeType = getMimeType(imgFileExt)
   const { top, left } = getPosition(xfrmNode, undefined, undefined)
   const { width, height } = getSize(xfrmNode, undefined, undefined)
-  const src = `data:${mimeType};base64,${base64ArrayBuffer(imgArrayBuffer)}`
+  const src = warpObj.mediaMode === 'blob'
+    ? createBlobUrlSafe(imgArrayBuffer, mimeType)
+    : `data:${mimeType};base64,${base64ArrayBuffer(imgArrayBuffer)}`
 
   const isFlipV = getTextByPathList(xfrmNode, ['attrs', 'flipV']) === '1'
   const isFlipH = getTextByPathList(xfrmNode, ['attrs', 'flipH']) === '1'
@@ -912,9 +930,7 @@ async function processPicNode(node, warpObj, source) {
       if (videoFileExt === 'mp4' || videoFileExt === 'webm' || videoFileExt === 'ogg') {
         uInt8ArrayVideo = await zip.file(videoFile).async('arraybuffer')
         videoMimeType = getMimeType(videoFileExt)
-        videoBlob = URL.createObjectURL(new Blob([uInt8ArrayVideo], {
-          type: videoMimeType
-        }))
+        videoBlob = createBlobUrlSafe(uInt8ArrayVideo, videoMimeType)
       }
     }
   }
@@ -927,7 +943,7 @@ async function processPicNode(node, warpObj, source) {
     audioFileExt = extractFileExtension(audioFile).toLowerCase()
     if (audioFileExt === 'mp3' || audioFileExt === 'wav' || audioFileExt === 'ogg') {
       uInt8ArrayAudio = await zip.file(audioFile).async('arraybuffer')
-      audioBlob = URL.createObjectURL(new Blob([uInt8ArrayAudio]))
+      audioBlob = createBlobUrlSafe(uInt8ArrayAudio, 'audio/' + audioFileExt)
     }
   }
 

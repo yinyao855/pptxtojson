@@ -1,17 +1,19 @@
-#!/usr/bin/env node
+#!/usr/bin/env tsx
 /**
- * 命令行脚本：接受一个 .pptx 文件路径，解析并输出 JSON。
- * 用法: node scripts/transvert.js <path-to.pptx>
- * 或:   pnpm run transvert <path-to.pptx>
+ * 测试原版 pptxtojson（src1）：直接 import 源码，无需打包。
+ * 用法: node scripts/transvert.js <path-to.pptx> [output.json]
+ * 或:   pnpm run transvert <path-to.pptx> [output.json]
  */
 
-import { parse } from '../dist/index.js'
+import { parse } from '../src1/pptxtojson.js'
 import fs from 'fs'
 import path from 'path'
 
 const pptxPath = process.argv[2]
+const outputPath = process.argv[3]
+
 if (!pptxPath) {
-  console.error('用法: node scripts/transvert.js <path-to.pptx>')
+  console.error('用法: node scripts/transvert.js <path-to.pptx> [output.json]')
   process.exit(1)
 }
 
@@ -24,9 +26,17 @@ if (!fs.existsSync(resolved)) {
 const buf = fs.readFileSync(resolved)
 const arrayBuffer = buf.buffer.slice(buf.byteOffset, buf.byteOffset + buf.byteLength)
 
-parse(arrayBuffer)
+parse(arrayBuffer, { mediaMode: 'blob' })
   .then((json) => {
-    console.log(JSON.stringify(json, null, 2))
+    const text = JSON.stringify(json, null, 2)
+
+    if (outputPath) {
+      const outResolved = path.resolve(process.cwd(), outputPath)
+      fs.writeFileSync(outResolved, text, 'utf-8')
+      console.log(`输出已写入: ${outResolved} (${(text.length / 1024).toFixed(1)} KB)`)
+    } else {
+      console.log(text)
+    }
   })
   .catch((err) => {
     console.error('解析失败:', err.message)
