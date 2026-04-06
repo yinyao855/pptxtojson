@@ -22,6 +22,11 @@ export class SafeXmlNode {
     this.el = el;
   }
 
+  /** Expose raw DOM Element (needed for document-order computation). */
+  get rawElement(): Element | null {
+    return this.el;
+  }
+
   /** Get a string attribute value, or undefined if missing. */
   attr(name: string): string | undefined {
     if (!this.el) return undefined;

@@ -26,3 +26,4 @@ pptx-renderer-main
 .pnpm-store
 dist
 docs
+output

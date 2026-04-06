@@ -11,7 +11,7 @@ import type { Table, TableCell as OutCell, Border } from '../adapter/types';
 const PX_TO_PT = 0.75;
 
 function pxToPt(px: number): number {
-  return px * PX_TO_PT;
+  return Number((px * PX_TO_PT).toFixed(4));
 }
 
 function defaultCellBorders(): OutCell['borders'] {
@@ -25,8 +25,9 @@ function defaultCellBorders(): OutCell['borders'] {
 export function tableToElement(
   node: TableNodeData,
   ctx: RenderContext,
-  order: number,
+  _order: number,
 ): Table {
+  const order = node.xmlOrder;
   const left = pxToPt(node.position.x);
   const top = pxToPt(node.position.y);
   const width = pxToPt(node.size.w);

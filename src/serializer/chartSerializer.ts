@@ -10,7 +10,7 @@ import type { ChartType, CommonChart, ScatterChart, ChartItem, ChartValue } from
 const PX_TO_PT = 0.75;
 
 function pxToPt(px: number): number {
-  return px * PX_TO_PT;
+  return Number((px * PX_TO_PT).toFixed(4));
 }
 
 const OOXML_CHART_TYPES: string[] = [
@@ -48,8 +48,9 @@ function getThemeColors(ctx: RenderContext): string[] {
 export function chartToElement(
   node: ChartNodeData,
   ctx: RenderContext,
-  order: number,
+  _order: number,
 ): CommonChart | ScatterChart {
+  const order = node.xmlOrder;
   const left = pxToPt(node.position.x);
   const top = pxToPt(node.position.y);
   const width = pxToPt(node.size.w);

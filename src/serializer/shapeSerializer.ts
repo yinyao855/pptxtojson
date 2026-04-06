@@ -35,7 +35,7 @@ import type { AutoFit, Fill, GradientFill, ImageFill, Shadow, Shape, Text } from
 const PX_TO_PT = 0.75;
 
 function pxToPt(px: number): number {
-  return px * PX_TO_PT;
+  return Number((px * PX_TO_PT).toFixed(4));
 }
 
 // ---------------------------------------------------------------------------
@@ -326,10 +326,9 @@ function getVAlignFromBodyPr(
   fallbackBp: SafeXmlNode | undefined,
 ): string {
   const anchor = (bodyPr ? bodyPr.attr('anchor') : null) || (fallbackBp ? fallbackBp.attr('anchor') : null);
-  if (anchor === 't' || anchor === 'top') return 'top';
-  if (anchor === 'ctr' || anchor === 'mid' || anchor === 'middle') return 'middle';
-  if (anchor === 'b' || anchor === 'bottom') return 'bottom';
-  return 'top';
+  if (anchor === 'ctr' || anchor === 'mid' || anchor === 'middle') return 'mid';
+  if (anchor === 'b' || anchor === 'bottom') return 'down';
+  return 'up';
 }
 
 function getIsVertical(bodyPr: SafeXmlNode | undefined, fallbackBp: SafeXmlNode | undefined): boolean {
@@ -360,7 +359,8 @@ function computeAutoFit(textBody: TextBody | undefined): AutoFit | undefined {
  * Serialize a shape node to pptxtojson `Shape` or `Text`.
  * Control flow and identifiers follow `renderShape` in `ShapeRenderer.ts`; output is JSON, not DOM.
  */
-export function renderShape(node: ShapeNodeData, ctx: RenderContext, order: number): Shape | Text {
+export function renderShape(node: ShapeNodeData, ctx: RenderContext, _order: number): Shape | Text {
+  const order = node.xmlOrder;
   const left = pxToPt(node.position.x);
   const top = pxToPt(node.position.y);
 
@@ -560,7 +560,7 @@ export function renderShape(node: ShapeNodeData, ctx: RenderContext, order: numb
   if (isCircularArrow || lineIsNoFill || !effectiveLine?.exists()) {
     borderResult = {
       border: { borderColor: '#000000', borderWidth: 0, borderType: 'solid' },
-      borderStrokeDasharray: '',
+      borderStrokeDasharray: '0',
     };
   } else if (
     !mainPathStrokeSuppressed &&
@@ -574,7 +574,7 @@ export function renderShape(node: ShapeNodeData, ctx: RenderContext, order: numb
         borderWidth: pxToPt(Math.max(gradientStroke.width, 1)),
         borderType: 'solid',
       },
-      borderStrokeDasharray: '',
+      borderStrokeDasharray: '0',
     };
   } else if (!mainPathStrokeSuppressed && effectiveStrokeWidth > 0 && strokeColor !== 'transparent') {
     const lnNode = effectiveLine!;
@@ -600,7 +600,7 @@ export function renderShape(node: ShapeNodeData, ctx: RenderContext, order: numb
   } else {
     borderResult = {
       border: { borderColor: '#000000', borderWidth: 0, borderType: 'solid' },
-      borderStrokeDasharray: '',
+      borderStrokeDasharray: '0',
     };
   }
 
@@ -640,7 +640,7 @@ export function renderShape(node: ShapeNodeData, ctx: RenderContext, order: numb
     borderColor: borderResult.border.borderColor,
     borderWidth: borderResult.border.borderWidth,
     borderType: borderResult.border.borderType,
-    borderStrokeDasharray: borderResult.borderStrokeDasharray || '',
+    borderStrokeDasharray: borderResult.borderStrokeDasharray || '0',
     fill: fillJson,
     isFlipV: node.flipV,
     isFlipH: node.flipH,
@@ -651,10 +651,46 @@ export function renderShape(node: ShapeNodeData, ctx: RenderContext, order: numb
     ...(autoFit ? { autoFit } : {}),
   };
 
-  if (
-    hasContent &&
-    (placeholder?.type === 'body' || placeholder?.type === 'title' || placeholder?.type === 'ctrTitle')
-  ) {
+  // --- Shape vs Text type detection ---
+  // Mirrors src1/pptxtojson.js logic:
+  // 1. cNvSpPr@txBox="1" → text box → output as "text"
+  // 2. Placeholder body/title/ctrTitle/subTitle → output as "text"
+  // 3. Custom geometry (non-diagram) → shape
+  // 4. Preset geometry != 'rect', or type is 'obj'/undefined → shape
+  // 5. No visible text but has fill/border → shape
+  // 6. Fallthrough → text
+  const isTxBox = node.source.child('nvSpPr').child('cNvSpPr').attr('txBox') === '1';
+  const isPlaceholderText =
+    placeholder?.type === 'body' ||
+    placeholder?.type === 'title' ||
+    placeholder?.type === 'ctrTitle' ||
+    placeholder?.type === 'subTitle';
+  const hasCustomGeom = !!node.customGeometry;
+  const hasPresetGeom = !!node.presetGeometry;
+  const isNonRectPreset = hasPresetGeom && shapType !== 'rect';
+  const noPlaceholderType = !placeholder?.type;
+  const hasFillOrBorder = !!fillCss || borderResult.border.borderWidth > 0;
+
+  let outputAsText = false;
+  if (isTxBox || isPlaceholderText) {
+    outputAsText = true;
+  } else if (hasCustomGeom) {
+    outputAsText = false;
+  } else if (isNonRectPreset || noPlaceholderType) {
+    if (hasPresetGeom && !hasContent && hasFillOrBorder) {
+      outputAsText = false;
+    } else if (hasPresetGeom && isNonRectPreset) {
+      outputAsText = false;
+    } else if (!hasPresetGeom && !hasContent) {
+      outputAsText = false;
+    } else {
+      outputAsText = true;
+    }
+  } else {
+    outputAsText = true;
+  }
+
+  if (outputAsText) {
     const textEl: Text = {
       ...baseCommon,
       type: 'text',

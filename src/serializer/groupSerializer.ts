@@ -18,7 +18,7 @@ function isGroup(e: Element): e is Group {
 const PX_TO_PT = 0.75;
 
 function pxToPt(px: number): number {
-  return px * PX_TO_PT;
+  return Number((px * PX_TO_PT).toFixed(4));
 }
 
 /**
@@ -49,10 +49,11 @@ export type NodeToElement = (
 export function groupToElement(
   node: GroupNodeData,
   ctx: RenderContext,
-  order: number,
+  _order: number,
   files: PptxFiles | undefined,
   nodeToElement: NodeToElement,
 ): Group {
+  const order = node.xmlOrder;
   const left = pxToPt(node.position.x);
   const top = pxToPt(node.position.y);
   const width = pxToPt(node.size.w);

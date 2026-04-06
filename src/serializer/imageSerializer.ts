@@ -14,7 +14,7 @@ import { isAllowedExternalUrl } from '../utils/urlSafety';
 const PX_TO_PT = 0.75;
 
 function pxToPt(px: number): number {
-  return px * PX_TO_PT;
+  return Number((px * PX_TO_PT).toFixed(4));
 }
 
 /**
@@ -323,7 +323,7 @@ function buildImage(
     ? lineStyleToBorder(ln, ctx)
     : {
         border: { borderColor: '#000000', borderWidth: 0, borderType: 'solid' as const },
-        borderStrokeDasharray: '',
+        borderStrokeDasharray: '0',
       };
 
   let rect: Image['rect'] | undefined;
@@ -368,7 +368,7 @@ function buildImage(
     borderColor: borderResult.border.borderColor,
     borderWidth: borderResult.border.borderWidth,
     borderType: borderResult.border.borderType,
-    borderStrokeDasharray: borderResult.borderStrokeDasharray || '',
+    borderStrokeDasharray: borderResult.borderStrokeDasharray || '0',
     ...(hasFilters ? { filters: mergedFilters } : {}),
     ...(link ? { link } : {}),
   };
@@ -388,8 +388,9 @@ function buildImage(
 export function pictureToElement(
   node: PicNodeData,
   ctx: RenderContext,
-  order: number,
+  _order: number,
 ): Image | Video | Audio {
+  const order = node.xmlOrder;
   const box = {
     left: pxToPt(node.position.x),
     top: pxToPt(node.position.y),

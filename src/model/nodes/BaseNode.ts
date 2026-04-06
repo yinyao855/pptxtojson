@@ -46,6 +46,8 @@ export interface BaseNodeData {
   hlinkClick?: HlinkAction;
   /** @internal Raw XML node — opaque to consumers. Use serializePresentation() for JSON-safe data. */
   source: SafeXmlNode;
+  /** Document-order index of this node's XML element (depth-first walk from root). */
+  xmlOrder: number;
 }
 
 /**
@@ -112,6 +114,30 @@ function parsePlaceholder(nvPr: SafeXmlNode): PlaceholderInfo | undefined {
 }
 
 /**
+ * Compute document-order index: count all Element nodes preceding this one
+ * in a depth-first walk from the document root.
+ * Mirrors the `cust_attr_order` counter in src1's `simplifyLostLess`.
+ */
+function getDocumentOrder(node: SafeXmlNode): number {
+  const el = node.rawElement;
+  if (!el) return 0;
+  const root = el.ownerDocument?.documentElement;
+  if (!root) return 0;
+  let count = 0;
+  function walk(cur: Element): boolean {
+    count++;
+    if (cur === el) return true;
+    const children = cur.childNodes;
+    for (let i = 0; i < children.length; i++) {
+      if (children[i].nodeType === 1 && walk(children[i] as Element)) return true;
+    }
+    return false;
+  }
+  walk(root);
+  return count;
+}
+
+/**
  * Parse the base properties common to all node types from a shape-like XML node.
  * Returns everything except `nodeType`, which the caller must set.
  */
@@ -165,5 +191,6 @@ export function parseBaseProps(spNode: SafeXmlNode): Omit<BaseNodeData, 'nodeTyp
     placeholder,
     hlinkClick,
     source: spNode,
+    xmlOrder: getDocumentOrder(spNode),
   };
 }
