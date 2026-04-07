@@ -27,19 +27,20 @@ function getThemeColors(presentation: PresentationData): string[] {
   return themeColors;
 }
 
-export function toPptxtojsonFormat(
+export async function toPptxtojsonFormat(
   presentation: PresentationData,
   files: PptxFiles,
   mediaMode: MediaMode = 'base64',
-): Output {
+): Promise<Output> {
   const size: Size = {
     width: pxToPt(presentation.width),
     height: pxToPt(presentation.height),
   };
   const themeColors = getThemeColors(presentation);
-  const slides: Slide[] = presentation.slides.map((slide) =>
-    slideToSlide(presentation, slide, files, mediaMode),
-  );
+  const slides: Slide[] = [];
+  for (const slide of presentation.slides) {
+    slides.push(await slideToSlide(presentation, slide, files, mediaMode));
+  }
   return {
     slides,
     themeColors,

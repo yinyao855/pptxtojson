@@ -29,7 +29,7 @@ function compositeOnWhiteToHex(r: number, g: number, b: number, a: number): stri
  * Background priority: slide.background -> layout.background -> master.background.
  * The first found background is used.
  */
-export function resolveSlideFill(ctx: RenderContext): Fill {
+export async function resolveSlideFill(ctx: RenderContext): Promise<Fill> {
   // Find the first available background in the inheritance chain,
   // and track which rels map to use for resolving image references
   let bgNode: SafeXmlNode | undefined;
@@ -67,7 +67,7 @@ export function resolveSlideFill(ctx: RenderContext): Fill {
  * Render background from bgPr (background properties).
  * Contains direct fill definitions: solidFill, gradFill, blipFill, etc.
  */
-export function renderBgPr(bgPr: SafeXmlNode, ctx: RenderContext, rels?: Map<string, RelEntry>): Fill {
+export async function renderBgPr(bgPr: SafeXmlNode, ctx: RenderContext, rels?: Map<string, RelEntry>): Promise<Fill> {
   // solidFill
   const solidFill = bgPr.child('solidFill');
   if (solidFill.exists()) {
@@ -126,7 +126,7 @@ export function renderBgPr(bgPr: SafeXmlNode, ctx: RenderContext, rels?: Map<str
         const mediaPath = resolveMediaPath(rel.target);
         const data = ctx.presentation.media.get(mediaPath);
         if (data) {
-          const picBase64 = resolveMediaToUrl(mediaPath, data, ctx.mediaMode, ctx.mediaUrlCache);
+          const picBase64 = await resolveMediaToUrl(mediaPath, data, ctx.mediaMode, ctx.mediaUrlCache);
           return {
             type: 'image',
             value: { picBase64, opacity: 1 },

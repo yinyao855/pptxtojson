@@ -1,6 +1,14 @@
 /**
- * Convert legacy / non-web-safe image bytes (TIFF, EMF bitmap, etc.) to PNG data URLs
- * so JSON output works in browsers (PPTist). Mirrors pptx-renderer ImageRenderer strategy.
+ * Convert legacy / non-web-safe image bytes to PNG data URLs
+ * so JSON output works in browsers (PPTist).
+ *
+ * Supported conversions:
+ * - TIFF/TIF  → PNG  (sync, via UTIF)
+ * - EMF bitmap (STRETCHDIBITS) → PNG  (sync, DIB extraction)
+ * - EMF vector (embedded PDF)  → PNG  (async, pdfjs-dist + canvas)
+ * - WDP/JXR/HDP (JPEG XR)     → PNG  (async, jpegxr WASM decoder)
+ * - WMF → transparent placeholder (unsupported)
+ * - PNG/JPEG/GIF/WebP/BMP/SVG  → pass-through with correct MIME
  */
 
 import UTIF from 'utif';
@@ -55,24 +63,91 @@ function tiffToRgba(data: Uint8Array): { width: number; height: number; data: Ui
 const TRANSPARENT_PNG_DATA_URL =
   'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==';
 
+// ---------------------------------------------------------------------------
+// WDP (JPEG XR) → PNG
+// ---------------------------------------------------------------------------
+
+async function wdpToPngDataUrl(data: Uint8Array): Promise<string> {
+  try {
+    const jpegxrModule: any = await import('jpegxr');
+    const JpegXR = jpegxrModule.default || jpegxrModule;
+    const mod = await new JpegXR();
+    const result = mod.decode(data);
+    const { width, height, bytes, pixelInfo } = result;
+    if (!width || !height || !bytes) return TRANSPARENT_PNG_DATA_URL;
+
+    const channels: number = pixelInfo?.channels ?? 3;
+    const isBgr: boolean = pixelInfo?.bgr ?? false;
+    const rgba = new Uint8ClampedArray(width * height * 4);
+    for (let i = 0, j = 0; i < width * height; i++, j += channels) {
+      const dst = i * 4;
+      rgba[dst + 0] = isBgr ? bytes[j + 2] : bytes[j + 0];
+      rgba[dst + 1] = bytes[j + 1];
+      rgba[dst + 2] = isBgr ? bytes[j + 0] : bytes[j + 2];
+      rgba[dst + 3] = channels === 4 ? bytes[j + 3] : 255;
+    }
+    return rgbaToPngDataUrl(rgba, width, height);
+  } catch {
+    return TRANSPARENT_PNG_DATA_URL;
+  }
+}
+
+// ---------------------------------------------------------------------------
+// EMF (embedded PDF) → PNG via pdfjs-dist + canvas
+// ---------------------------------------------------------------------------
+
+async function emfPdfToPngDataUrl(pdfData: Uint8Array, targetWidth = 1024): Promise<string> {
+  try {
+    const pdfjsLib: any = await import('pdfjs-dist/legacy/build/pdf.mjs');
+    const canvasModule: any = await import('canvas');
+
+    const doc = await pdfjsLib.getDocument({ data: pdfData, verbosity: 0 }).promise;
+    const page = await doc.getPage(1);
+    const baseViewport = page.getViewport({ scale: 1 });
+    const scale = Math.max(1, targetWidth / baseViewport.width);
+    const viewport = page.getViewport({ scale });
+    const w = Math.round(viewport.width);
+    const h = Math.round(viewport.height);
+
+    const canvas = canvasModule.createCanvas(w, h);
+    const canvasCtx = canvas.getContext('2d');
+    canvasCtx.fillStyle = '#ffffff';
+    canvasCtx.fillRect(0, 0, w, h);
+    await page.render({ canvasContext: canvasCtx, viewport }).promise;
+
+    const pngBuf: Uint8Array = canvas.toBuffer('image/png');
+    await doc.destroy();
+    const base64 = arrayBufferToBase64(
+      new Uint8Array(pngBuf.buffer, (pngBuf as any).byteOffset ?? 0, pngBuf.byteLength),
+    );
+    return `data:image/png;base64,${base64}`;
+  } catch {
+    return TRANSPARENT_PNG_DATA_URL;
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Unified entry point
+// ---------------------------------------------------------------------------
+
 /**
- * If the media type is not reliably displayable in browsers, convert to PNG data URL.
- * Otherwise return `data:<mime>;base64,<raw>` for the original bytes.
+ * Convert media bytes to a data URL suitable for web display.
  *
- * - TIFF/TIF: decode → PNG
- * - EMF: embedded DIB → PNG; embedded PDF → transparent placeholder (full PDF render needs pdfjs)
- * - WMF: not supported → transparent placeholder
- * - PNG/JPEG/GIF/WebP/BMP/SVG: pass through with correct MIME
+ * Async because WDP decoding (jpegxr WASM) and EMF-PDF rendering
+ * (pdfjs-dist) require async initialization; all other formats
+ * resolve immediately.
  */
-export function encodeMediaForWebDisplay(mediaPath: string, data: Uint8Array): string {
+export async function encodeMediaForWebDisplay(mediaPath: string, data: Uint8Array): Promise<string> {
   const ext = extOf(mediaPath);
 
   if (ext === 'tif' || ext === 'tiff') {
     const rgba = tiffToRgba(data);
-    if (rgba) {
-      return rgbaToPngDataUrl(rgba.data, rgba.width, rgba.height);
-    }
+    if (rgba) return rgbaToPngDataUrl(rgba.data, rgba.width, rgba.height);
     return TRANSPARENT_PNG_DATA_URL;
+  }
+
+  if (ext === 'wdp' || ext === 'jxr' || ext === 'hdp') {
+    return wdpToPngDataUrl(data);
   }
 
   if (ext === 'emf') {
@@ -82,11 +157,7 @@ export function encodeMediaForWebDisplay(mediaPath: string, data: Uint8Array): s
       return rgbaToPngDataUrl(rgba, width, height);
     }
     if (content.type === 'pdf') {
-      // Optional: integrate pdfjs-dist later (see pptx-renderer pdfRenderer.ts)
-      return TRANSPARENT_PNG_DATA_URL;
-    }
-    if (content.type === 'empty') {
-      return TRANSPARENT_PNG_DATA_URL;
+      return emfPdfToPngDataUrl(content.data);
     }
     return TRANSPARENT_PNG_DATA_URL;
   }
@@ -107,18 +178,14 @@ function isNonWebFormat(mediaPath: string): boolean {
 
 /**
  * Resolve media bytes to a URL string according to the given mode.
- * - 'base64': data URL via `encodeMediaForWebDisplay` (portable, but verbose).
- * - 'blob':   blob URL via `getOrCreateBlobUrl` (compact, browser-only).
- *
- * Non-web-safe formats (TIFF, EMF, WDP, WMF) always go through conversion
- * even in blob mode, because browsers cannot display them natively.
+ * Non-web-safe formats always go through conversion even in blob mode.
  */
-export function resolveMediaToUrl(
+export async function resolveMediaToUrl(
   mediaPath: string,
   data: Uint8Array | ArrayBuffer,
   mode: 'base64' | 'blob',
   cache: Map<string, string>,
-): string {
+): Promise<string> {
   const bytes = data instanceof Uint8Array ? data : new Uint8Array(data);
 
   if (isNonWebFormat(mediaPath)) {

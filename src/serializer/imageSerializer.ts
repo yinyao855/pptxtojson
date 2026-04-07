@@ -200,7 +200,7 @@ function applyExtLstImageEffectsToFilters(blip: SafeXmlNode, out: NonNullable<Im
 /**
  * Resolve a media URL from a relationship ID.
  */
-function resolveMediaUrl(rId: string | undefined, ctx: RenderContext): string | undefined {
+async function resolveMediaUrl(rId: string | undefined, ctx: RenderContext): Promise<string | undefined> {
   if (!rId) return undefined;
 
   const rel = ctx.slide.rels.get(rId);
@@ -222,14 +222,14 @@ function resolveMediaUrl(rId: string | undefined, ctx: RenderContext): string | 
 /**
  * Render a video element.
  */
-function renderVideo(
+async function renderVideo(
   node: PicNodeData,
   ctx: RenderContext,
   order: number,
   box: { left: number; top: number; width: number; height: number },
-): Video {
+): Promise<Video> {
   // Try to get video URL from mediaRId
-  const videoUrl = resolveMediaUrl(node.mediaRId, ctx);
+  const videoUrl = await resolveMediaUrl(node.mediaRId, ctx);
 
   // Also try to show poster image from blipEmbed
   let posterUrl: string | undefined;
@@ -239,7 +239,7 @@ function renderVideo(
       const mediaPath = resolveMediaPath(rel.target);
       const data = ctx.presentation.media.get(mediaPath);
       if (data && !isUnsupportedFormat(mediaPath)) {
-        posterUrl = resolveMediaToUrl(mediaPath, data, ctx.mediaMode, ctx.mediaUrlCache);
+        posterUrl = await resolveMediaToUrl(mediaPath, data, ctx.mediaMode, ctx.mediaUrlCache);
       }
     }
   }
@@ -259,13 +259,13 @@ function renderVideo(
 /**
  * Render an audio element.
  */
-function renderAudio(
+async function renderAudio(
   node: PicNodeData,
   ctx: RenderContext,
   order: number,
   box: { left: number; top: number; width: number; height: number },
-): Audio {
-  const audioUrl = resolveMediaUrl(node.mediaRId, ctx);
+): Promise<Audio> {
+  const audioUrl = await resolveMediaUrl(node.mediaRId, ctx);
   const blob = audioUrl || '';
   // TODO: optional cover image from blipEmbed
 
@@ -280,12 +280,12 @@ function renderAudio(
 /**
  * Render an image element.
  */
-function renderImage(
+async function renderImage(
   node: PicNodeData,
   ctx: RenderContext,
   order: number,
   box: { left: number; top: number; width: number; height: number },
-): Image {
+): Promise<Image> {
   const embedId = node.blipEmbed;
   let src = '';
 
@@ -305,7 +305,7 @@ function renderImage(
     return buildImage(node, ctx, order, box, src, undefined);
   }
 
-  src = resolveMediaToUrl(mediaPath, data, ctx.mediaMode, ctx.mediaUrlCache);
+  src = await resolveMediaToUrl(mediaPath, data, ctx.mediaMode, ctx.mediaUrlCache);
   return buildImage(node, ctx, order, box, src, buildImageFilters(node));
 }
 
@@ -385,11 +385,11 @@ function buildImage(
  * - Crop via `rect` (fractions)
  * - Rotation and flip on Image
  */
-export function pictureToElement(
+export async function pictureToElement(
   node: PicNodeData,
   ctx: RenderContext,
   _order: number,
-): Image | Video | Audio {
+): Promise<Image | Video | Audio> {
   const order = node.xmlOrder;
   const box = {
     left: pxToPt(node.position.x),

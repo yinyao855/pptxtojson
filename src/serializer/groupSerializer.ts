@@ -43,15 +43,15 @@ export type NodeToElement = (
   ctx: RenderContext,
   order: number,
   files?: PptxFiles,
-) => Element;
+) => Promise<Element>;
 
-export function groupToElement(
+export async function groupToElement(
   node: GroupNodeData,
   ctx: RenderContext,
   _order: number,
   files: PptxFiles | undefined,
   nodeToElement: NodeToElement,
-): Group {
+): Promise<Group> {
   const order = node.xmlOrder;
   const left = pxToPt(node.position.x);
   const top = pxToPt(node.position.y);
@@ -81,7 +81,7 @@ export function groupToElement(
   for (const childXml of node.children) {
     const childNode = parseChildNode(childXml, rels, slidePath, diagramDrawings);
     if (childNode) {
-      const el = nodeToElement(childNode, childCtx, idx, files);
+      const el = await nodeToElement(childNode, childCtx, idx, files);
       if (isGroup(el)) {
         const gLeft = toFixed((el.left - chOffX) * ws);
         const gTop = toFixed((el.top - chOffY) * hs);

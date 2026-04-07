@@ -6,7 +6,6 @@
 import { parseZip } from './parser/ZipParser'
 import { buildPresentation } from './model/Presentation'
 import { toPptxtojsonFormat } from './adapter/toPptxtojson'
-import { preprocessMedia } from './utils/mediaPreprocess'
 import type { Output } from './adapter/types'
 import type { MediaMode } from './serializer/RenderContext'
 
@@ -16,12 +15,6 @@ export interface ParseOptions {
    * 'blob'   — use blob: URLs (compact JSON, browser-only, good for development).
    */
   mediaMode?: MediaMode
-  /**
-   * Run async media pre-processing (EMF-PDF → PNG via pdfjs, WDP → PNG via sharp).
-   * Requires `sharp` and/or `pdfjs-dist` + `canvas` to be installed.
-   * Default: false (only synchronous conversions like TIFF and EMF-bitmap are done).
-   */
-  preprocess?: boolean
 }
 
 /**
@@ -31,13 +24,10 @@ export interface ParseOptions {
 export async function parse(buffer: ArrayBuffer, options?: ParseOptions): Promise<Output> {
   const files = await parseZip(buffer)
   const presentation = buildPresentation(files)
-  if (options?.preprocess !== false) {
-    await preprocessMedia(presentation)
-  }
   return toPptxtojsonFormat(presentation, files, options?.mediaMode ?? 'base64')
 }
 
-export { parseZip, buildPresentation, toPptxtojsonFormat, preprocessMedia }
+export { parseZip, buildPresentation, toPptxtojsonFormat }
 export type { Output, Slide, Element } from './adapter/types'
 export type { PptxFiles } from './parser/ZipParser'
 export type { PresentationData } from './model/Presentation'

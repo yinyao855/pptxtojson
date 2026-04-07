@@ -43,7 +43,7 @@ function pxToPt(px: number): number {
 // ---------------------------------------------------------------------------
 
 /** Resolve shape blipFill to embedded image data for JSON (e.g. slide 23 process graphic). */
-function resolveShapeBlipUrl(blipFill: SafeXmlNode, ctx: RenderContext): string | null {
+async function resolveShapeBlipUrl(blipFill: SafeXmlNode, ctx: RenderContext): Promise<string | null> {
   const blip = blipFill.child('blip');
   const embedId = blip.attr('embed') ?? blip.attr('r:embed');
   if (!embedId) return null;
@@ -195,20 +195,20 @@ function patternFillToFill(pattFill: SafeXmlNode, ctx: RenderContext): Fill {
 /**
  * Build `Fill` after the same fillCss / gradientFillData / line-like rules as ShapeRenderer.
  */
-function fillToJson(
+async function fillToJson(
   spPr: SafeXmlNode,
   ctx: RenderContext,
   fillCss: string,
   gradientFillData: GradientFillData | null,
   isLineLike: boolean,
-): Fill {
+): Promise<Fill> {
   if (isLineLike) {
     return { type: 'color', value: 'transparent' };
   }
 
   const blipFill = spPr.child('blipFill');
   if (blipFill.exists()) {
-    const pic = resolveShapeBlipUrl(blipFill, ctx);
+    const pic = await resolveShapeBlipUrl(blipFill, ctx);
     if (pic) {
       const imageFill: ImageFill = { type: 'image', value: { picBase64: pic, opacity: 1 } };
       return imageFill;
@@ -431,7 +431,7 @@ function resolveInheritedPlaceholderFill(
  * Serialize a shape node to pptxtojson `Shape` or `Text`.
  * Control flow and identifiers follow `renderShape` in `ShapeRenderer.ts`; output is JSON, not DOM.
  */
-export function renderShape(node: ShapeNodeData, ctx: RenderContext, _order: number): Shape | Text {
+export async function renderShape(node: ShapeNodeData, ctx: RenderContext, _order: number): Promise<Shape | Text> {
   const order = node.xmlOrder;
   const left = pxToPt(node.position.x);
   const top = pxToPt(node.position.y);
@@ -685,7 +685,7 @@ export function renderShape(node: ShapeNodeData, ctx: RenderContext, _order: num
     };
   }
 
-  const fillJson = fillToJson(spPr, ctx, fillCss, gradientFillData, isLineLike);
+  const fillJson = await fillToJson(spPr, ctx, fillCss, gradientFillData, isLineLike);
 
   const shadowJson = resolveShapeShadow(node, spPr, ctx);
   const linkStr = resolveShapeLink(node, ctx);
@@ -806,6 +806,6 @@ function textBodyRenderOptions(
 }
 
 /** @deprecated Use `renderShape` — same name as `ShapeRenderer` for diff-friendly comparison. */
-export function shapeToElement(node: ShapeNodeData, ctx: RenderContext, order: number): Shape | Text {
+export async function shapeToElement(node: ShapeNodeData, ctx: RenderContext, order: number): Promise<Shape | Text> {
   return renderShape(node, ctx, order);
 }

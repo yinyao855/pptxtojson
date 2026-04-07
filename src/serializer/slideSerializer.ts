@@ -97,12 +97,12 @@ function parseTemplateShapes(spTree: SafeXmlNode): SlideNode[] {
 /**
  * Dispatch a slide node to the appropriate serializer and return Element.
  */
-function nodeToElement(
+async function nodeToElement(
   node: SlideNode,
   ctx: ReturnType<typeof createRenderContext>,
   order: number,
   files?: PptxFiles,
-): Element {
+): Promise<Element> {
   switch (node.nodeType) {
     case 'shape':
       return shapeToElement(node, ctx, order);
@@ -187,17 +187,17 @@ function getTransitionForSlide(slide: SlideData, files: PptxFiles): Slide['trans
  * 3. Layout non-placeholder shapes
  * 4. Slide shapes (on top)
  */
-export function slideToSlide(
+export async function slideToSlide(
   presentation: PresentationData,
   slide: SlideData,
   files: PptxFiles,
   mediaMode: MediaMode = 'base64',
-): Slide {
+): Promise<Slide> {
   // Create render context (resolves slide -> layout -> master -> theme chain)
   const ctx = createRenderContext(presentation, slide, undefined, mediaMode);
 
   // Render background
-  const fill = resolveSlideFill(ctx);
+  const fill = await resolveSlideFill(ctx);
 
   // --- Render master template shapes (behind layout and slide) ---
   // Respect showMasterSp flags:
@@ -207,37 +207,37 @@ export function slideToSlide(
   if (slide.showMasterSp && ctx.layout.showMasterSp) {
     const masterCtx = { ...ctx, slide: { ...ctx.slide, rels: ctx.master.rels } };
     const masterShapes = parseTemplateShapes(ctx.master.spTree);
-    masterShapes.forEach((node, i) => {
+    for (let i = 0; i < masterShapes.length; i++) {
       try {
-        layoutElements.push(nodeToElement(node, masterCtx, i, files));
+        layoutElements.push(await nodeToElement(masterShapes[i], masterCtx, i, files));
       } catch {
         // skip
       }
-    });
+    }
   }
 
   // --- Render layout template shapes ---
   if (slide.showMasterSp) {
     const layoutCtx = { ...ctx, slide: { ...ctx.slide, rels: ctx.layout.rels } };
     const layoutShapes = parseTemplateShapes(ctx.layout.spTree);
-    layoutShapes.forEach((node, i) => {
+    for (let i = 0; i < layoutShapes.length; i++) {
       try {
-        layoutElements.push(nodeToElement(node, layoutCtx, i, files));
+        layoutElements.push(await nodeToElement(layoutShapes[i], layoutCtx, i, files));
       } catch {
         // skip
       }
-    });
+    }
   }
 
   // --- Render slide shapes (on top) ---
   const elements: Element[] = [];
-  slide.nodes.forEach((node, i) => {
+  for (let i = 0; i < slide.nodes.length; i++) {
     try {
-      elements.push(nodeToElement(node, ctx, i, files));
+      elements.push(await nodeToElement(slide.nodes[i], ctx, i, files));
     } catch {
       // skip failed node
     }
-  });
+  }
 
   return {
     fill,
