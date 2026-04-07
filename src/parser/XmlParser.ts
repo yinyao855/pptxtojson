@@ -91,35 +91,35 @@ export class SafeXmlNode {
  * Parse an XML string into a SafeXmlNode wrapping the document element.
  * Uses the browser's built-in DOMParser.
  */
-export function parseXml(xmlString: string): SafeXmlNode {
-  const parser = new DOMParser();
-  const doc = parser.parseFromString(xmlString, 'application/xml');
-
-  // Check for parser errors — DOMParser returns a parsererror document on failure
-  const errorNode = doc.querySelector('parsererror');
-  if (errorNode) {
-    console.warn('XML parse error:', errorNode.textContent);
-    return new SafeXmlNode(null);
-  }
-
-  return new SafeXmlNode(doc.documentElement);
-}
-
-/**
- * use @xmldom/xmldom in Node.js.
- */
-// import { DOMParser } from '@xmldom/xmldom';
-
 // export function parseXml(xmlString: string): SafeXmlNode {
 //   const parser = new DOMParser();
 //   const doc = parser.parseFromString(xmlString, 'application/xml');
 
-//   // Check for parser errors — browser DOMParser returns a parsererror document on failure
-//   const errorNode = doc.getElementsByTagName('parsererror');
-//   if (errorNode.length > 0) {
-//     console.warn('XML parse error:', errorNode[0].textContent);
+//   // Check for parser errors — DOMParser returns a parsererror document on failure
+//   const errorNode = doc.querySelector('parsererror');
+//   if (errorNode) {
+//     console.warn('XML parse error:', errorNode.textContent);
 //     return new SafeXmlNode(null);
 //   }
 
-//   return new SafeXmlNode(doc.documentElement as Element | null);
+//   return new SafeXmlNode(doc.documentElement);
 // }
+
+/**
+ * use @xmldom/xmldom in Node.js.
+ */
+import { DOMParser } from '@xmldom/xmldom';
+
+export function parseXml(xmlString: string): SafeXmlNode {
+  const parser = new DOMParser();
+  const doc = parser.parseFromString(xmlString, 'application/xml');
+
+  // Check for parser errors — browser DOMParser returns a parsererror document on failure
+  const errorNode = doc.getElementsByTagName('parsererror');
+  if (errorNode.length > 0) {
+    console.warn('XML parse error:', errorNode[0].textContent);
+    return new SafeXmlNode(null);
+  }
+
+  return new SafeXmlNode(doc.documentElement as Element | null);
+}
