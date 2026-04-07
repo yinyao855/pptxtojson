@@ -178,7 +178,6 @@ function isNonWebFormat(mediaPath: string): boolean {
 
 /**
  * Resolve media bytes to a URL string according to the given mode.
- * Non-web-safe formats always go through conversion even in blob mode.
  */
 export async function resolveMediaToUrl(
   mediaPath: string,
@@ -187,10 +186,6 @@ export async function resolveMediaToUrl(
   cache: Map<string, string>,
 ): Promise<string> {
   const bytes = data instanceof Uint8Array ? data : new Uint8Array(data);
-
-  if (isNonWebFormat(mediaPath)) {
-    return encodeMediaForWebDisplay(mediaPath, bytes);
-  }
 
   if (mode === 'blob') {
     return getOrCreateBlobUrl(mediaPath, data, cache);

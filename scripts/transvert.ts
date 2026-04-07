@@ -31,7 +31,7 @@ async function main() {
 
   const files = await parseZip(arrayBuffer)
   const presentation = buildPresentation(files)
-  const json = await toPptxtojsonFormat(presentation, files, 'base64')
+  const json = await toPptxtojsonFormat(presentation, files, 'blob')
 
   const text = JSON.stringify(json, null, 2)
 
