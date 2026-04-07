@@ -12,6 +12,7 @@ import { parseChildNode } from '../model/Slide';
 import type { RenderContext } from './RenderContext';
 import type { PptxFiles } from '../parser/ZipParser';
 import type { Group, Element, BaseElement } from '../adapter/types';
+import { SafeXmlNode } from '../parser/XmlParser';
 
 function isGroup(e: Element): e is Group {
   return (e as Group).type === 'group';
@@ -25,6 +26,16 @@ function pxToPt(px: number): number {
 
 function toFixed(n: number): number {
   return Number(n.toFixed(4));
+}
+
+const FILL_TAGS = ['solidFill', 'gradFill', 'blipFill', 'pattFill'] as const;
+
+function findGroupFillNode(grpSpPr: SafeXmlNode): SafeXmlNode | undefined {
+  for (const tag of FILL_TAGS) {
+    const n = grpSpPr.child(tag);
+    if (n.exists()) return grpSpPr;
+  }
+  return undefined;
 }
 
 export type NodeToElement = (
@@ -61,10 +72,16 @@ export function groupToElement(
   const elements: BaseElement[] = [];
   let idx = 0;
 
+  const grpSpPr = node.source.child('grpSpPr');
+  const groupFillSource = findGroupFillNode(grpSpPr);
+  const childCtx: RenderContext = groupFillSource
+    ? { ...ctx, groupFillNode: groupFillSource }
+    : ctx;
+
   for (const childXml of node.children) {
     const childNode = parseChildNode(childXml, rels, slidePath, diagramDrawings);
     if (childNode) {
-      const el = nodeToElement(childNode, ctx, idx, files);
+      const el = nodeToElement(childNode, childCtx, idx, files);
       if (isGroup(el)) {
         const gLeft = toFixed((el.left - chOffX) * ws);
         const gTop = toFixed((el.top - chOffY) * hs);
