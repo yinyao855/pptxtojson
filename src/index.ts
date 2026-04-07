@@ -6,7 +6,6 @@
 import { parseZip } from './parser/ZipParser'
 import { buildPresentation } from './model/Presentation'
 import { toPptxtojsonFormat } from './adapter/toPptxtojson'
-import { initDOMParser } from './parser/XmlParser'
 import { preprocessMedia } from './utils/mediaPreprocess'
 import type { Output } from './adapter/types'
 import type { MediaMode } from './serializer/RenderContext'
@@ -38,7 +37,7 @@ export async function parse(buffer: ArrayBuffer, options?: ParseOptions): Promis
   return toPptxtojsonFormat(presentation, files, options?.mediaMode ?? 'base64')
 }
 
-export { parseZip, buildPresentation, toPptxtojsonFormat, initDOMParser, preprocessMedia }
+export { parseZip, buildPresentation, toPptxtojsonFormat, preprocessMedia }
 export type { Output, Slide, Element } from './adapter/types'
 export type { PptxFiles } from './parser/ZipParser'
 export type { PresentationData } from './model/Presentation'

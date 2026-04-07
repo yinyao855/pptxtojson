@@ -8,9 +8,6 @@ importers:
 
   .:
     dependencies:
-      '@xmldom/xmldom':
-        specifier: ^0.9.9
-        version: 0.9.9
       canvas:
         specifier: ^3.2.3
         version: 3.2.3
@@ -66,6 +63,9 @@ importers:
       '@rollup/plugin-typescript':
         specifier: ^11.1.6
         version: 11.1.6(rollup@3.30.0)(tslib@2.8.1)(typescript@5.9.3)
+      '@xmldom/xmldom':
+        specifier: ^0.9.9
+        version: 0.9.9
       eslint:
         specifier: ^8.27.0
         version: 8.57.1

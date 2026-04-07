@@ -5,7 +5,6 @@
  * 或:   pnpm run transvert:pro <path-to.pptx> [output.json]
  */
 
-import { initDOMParser } from '../src/parser/XmlParser'
 import { parseZip } from '../src/parser/ZipParser'
 import { buildPresentation } from '../src/model/Presentation'
 import { preprocessMedia } from '../src/utils/mediaPreprocess'
@@ -28,8 +27,6 @@ if (!fs.existsSync(resolved)) {
 }
 
 async function main() {
-  await initDOMParser()
-
   const buf = fs.readFileSync(resolved)
   const arrayBuffer = buf.buffer.slice(buf.byteOffset, buf.byteOffset + buf.byteLength)
 
