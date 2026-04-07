@@ -13,12 +13,17 @@ const onwarn = (warning) => {
 export default {
   input: 'src/index.ts',
   onwarn,
-  external: ['@xmldom/xmldom'],
+  external: ['pdfjs-dist/legacy/build/pdf.mjs', 'canvas', 'jpegxr'],
   output: [
     {
       file: 'dist/index.umd.js',
       format: 'umd',
       name: 'pptxtojson-pro',
+      globals: {
+        'pdfjs-dist/legacy/build/pdf.mjs': 'pdfjsLib',
+        'canvas': 'canvas',
+        'jpegxr': 'JpegXR',
+      },
     },
     {
       file: 'dist/index.cjs',

@@ -99,10 +99,19 @@ export function encodeMediaForWebDisplay(mediaPath: string, data: Uint8Array): s
   return toDataUrl(arrayBufferToBase64(data), mime);
 }
 
+const NON_WEB_EXTENSIONS = new Set(['tif', 'tiff', 'emf', 'wmf', 'wdp', 'jxr', 'hdp']);
+
+function isNonWebFormat(mediaPath: string): boolean {
+  return NON_WEB_EXTENSIONS.has(extOf(mediaPath));
+}
+
 /**
  * Resolve media bytes to a URL string according to the given mode.
  * - 'base64': data URL via `encodeMediaForWebDisplay` (portable, but verbose).
  * - 'blob':   blob URL via `getOrCreateBlobUrl` (compact, browser-only).
+ *
+ * Non-web-safe formats (TIFF, EMF, WDP, WMF) always go through conversion
+ * even in blob mode, because browsers cannot display them natively.
  */
 export function resolveMediaToUrl(
   mediaPath: string,
@@ -110,9 +119,14 @@ export function resolveMediaToUrl(
   mode: 'base64' | 'blob',
   cache: Map<string, string>,
 ): string {
+  const bytes = data instanceof Uint8Array ? data : new Uint8Array(data);
+
+  if (isNonWebFormat(mediaPath)) {
+    return encodeMediaForWebDisplay(mediaPath, bytes);
+  }
+
   if (mode === 'blob') {
     return getOrCreateBlobUrl(mediaPath, data, cache);
   }
-  const bytes = data instanceof Uint8Array ? data : new Uint8Array(data);
   return encodeMediaForWebDisplay(mediaPath, bytes);
 }

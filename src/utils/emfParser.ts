@@ -143,7 +143,7 @@ function parseMultiformats(
   data: Uint8Array,
   view: DataView,
   offset: number,
-  _recordSize: number,
+  recordSize: number,
 ): EmfContent | null {
   // Layout from record start:
   // +12: commentIdentifier(4), +16: publicCommentIdentifier(4)
@@ -154,6 +154,7 @@ function parseMultiformats(
 
   const countFormats = view.getUint32(offset + 36, true);
   const descriptorStart = offset + 40;
+  const recordEnd = offset + recordSize;
 
   for (let i = 0; i < countFormats && i < 10; i++) {
     const descOff = descriptorStart + i * 16;
@@ -164,9 +165,14 @@ function parseMultiformats(
 
     // offData is relative to the start of the record
     const dataStart = offset + offData;
-    if (dataStart + cbData > data.length || cbData === 0) continue;
+    if (cbData === 0) continue;
 
-    const formatData = data.subarray(dataStart, dataStart + cbData);
+    // Use the full record extent as upper bound — the format descriptor's
+    // cbData may undercount by a few bytes for linearized PDFs whose
+    // internal /L header matches cbData but whose trailer/%%EOF spills past.
+    const safeEnd = Math.min(recordEnd, data.length);
+    if (dataStart >= safeEnd) continue;
+    const formatData = data.subarray(dataStart, safeEnd);
     const pdf = extractPdfFromBuffer(formatData);
     if (pdf) return { type: 'pdf', data: pdf };
   }

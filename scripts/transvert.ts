@@ -8,6 +8,7 @@
 import { initDOMParser } from '../src/parser/XmlParser'
 import { parseZip } from '../src/parser/ZipParser'
 import { buildPresentation } from '../src/model/Presentation'
+import { preprocessMedia } from '../src/utils/mediaPreprocess'
 import { toPptxtojsonFormat } from '../src/adapter/toPptxtojson'
 import fs from 'fs'
 import path from 'path'
@@ -34,7 +35,13 @@ async function main() {
 
   const files = await parseZip(arrayBuffer)
   const presentation = buildPresentation(files)
-  const json = toPptxtojsonFormat(presentation, files, 'blob')
+
+  const converted = await preprocessMedia(presentation)
+  if (converted.size > 0) {
+    console.error(`预处理: 已转换 ${converted.size} 个非web格式媒体 →`, [...converted].join(', '))
+  }
+
+  const json = toPptxtojsonFormat(presentation, files, 'base64')
 
   const text = JSON.stringify(json, null, 2)
 

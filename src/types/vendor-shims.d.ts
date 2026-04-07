@@ -18,3 +18,26 @@ declare module 'pngjs' {
     };
   }
 }
+
+declare module 'jpegxr' {
+  class JpegXR {
+    constructor();
+    then<T>(resolve: (mod: { decode(data: Uint8Array | ArrayBuffer): JpegXRResult }) => T): Promise<T>;
+  }
+  interface JpegXRResult {
+    width: number;
+    height: number;
+    bytes: Uint8Array;
+    pixelInfo: { channels: number; bgr: boolean; hasAlpha: boolean };
+  }
+  export = JpegXR;
+}
+
+declare module 'canvas' {
+  export function createCanvas(width: number, height: number): {
+    getContext(type: '2d'): unknown;
+    toBuffer(mime: string): Buffer;
+    width: number;
+    height: number;
+  };
+}

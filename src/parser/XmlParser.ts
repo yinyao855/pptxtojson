@@ -4,6 +4,8 @@
  * All operations are null-safe — accessing missing elements never crashes.
  */
 
+import { DOMParser as XmlDOMParser } from '@xmldom/xmldom';
+
 /** Iterate only Element children (nodeType === 1) from childNodes.
  *  Works in both browser DOM and @xmldom/xmldom (which may lack `.children`). */
 function elementChildren(el: Element): Element[] {
@@ -117,8 +119,7 @@ export async function initDOMParser(): Promise<void> {
     _cachedParser = new DOMParser();
     return;
   }
-  const mod = await import('@xmldom/xmldom');
-  _cachedParser = new mod.DOMParser() as unknown as DOMParserLike;
+  _cachedParser = new XmlDOMParser() as unknown as DOMParserLike;
 }
 
 function getDOMParser(): DOMParserLike {
@@ -141,18 +142,8 @@ function ensureDOMParser(): DOMParserLike {
     _cachedParser = new DOMParser();
     return _cachedParser;
   }
-  // Attempt synchronous require for CJS environments (Node.js)
-  try {
-    // eslint-disable-next-line @typescript-eslint/no-implied-eval
-    const importFn = new Function('m', 'return require(m)') as (m: string) => { DOMParser: new () => DOMParserLike };
-    const mod = importFn('@xmldom/xmldom');
-    _cachedParser = new mod.DOMParser();
-    return _cachedParser;
-  } catch {
-    throw new Error(
-      'DOMParser is not available. Install @xmldom/xmldom to run in Node.js: pnpm add @xmldom/xmldom',
-    );
-  }
+  _cachedParser = new XmlDOMParser() as unknown as DOMParserLike;
+  return _cachedParser;
 }
 
 /**
