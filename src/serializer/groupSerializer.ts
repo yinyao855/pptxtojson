@@ -18,6 +18,10 @@ function isGroup(e: Element): e is Group {
   return (e as Group).type === 'group';
 }
 
+function isShape(e: Element): e is import('../adapter/types').Shape {
+  return (e as import('../adapter/types').Shape).type === 'shape';
+}
+
 const PX_TO_PT = 0.75;
 
 function pxToPt(px: number): number {
@@ -26,6 +30,60 @@ function pxToPt(px: number): number {
 
 function toFixed(n: number): number {
   return Number(n.toFixed(4));
+}
+
+/**
+ * Scale all coordinate values in an SVG path string by (sx, sy).
+ * Handles M, L, C, Q, S, T, A, H, V, Z and their lowercase (relative) variants.
+ */
+function scaleSvgPath(d: string, sx: number, sy: number): string {
+  if (sx === 1 && sy === 1) return d;
+  const tokens = d.match(/[A-Za-z]|[-+]?(?:\d+\.?\d*|\.\d+)(?:[eE][-+]?\d+)?/g);
+  if (!tokens) return d;
+  const out: string[] = [];
+  let cmd = '';
+  let argIdx = 0;
+  for (const tok of tokens) {
+    if (/^[A-Za-z]$/.test(tok)) {
+      cmd = tok;
+      argIdx = 0;
+      out.push(tok);
+      continue;
+    }
+    const v = parseFloat(tok);
+    const upper = cmd.toUpperCase();
+    let scaled: number;
+    if (upper === 'H') {
+      scaled = v * sx;
+    } else if (upper === 'V') {
+      scaled = v * sy;
+    } else if (upper === 'A') {
+      // A rx ry x-rotation large-arc-flag sweep-flag x y
+      const ai = argIdx % 7;
+      if (ai === 0) scaled = v * sx;
+      else if (ai === 1) scaled = v * sy;
+      else if (ai >= 2 && ai <= 4) scaled = v;
+      else if (ai === 5) scaled = v * sx;
+      else scaled = v * sy;
+    } else {
+      // M, L, C, Q, S, T: alternating x, y
+      scaled = (argIdx % 2 === 0) ? v * sx : v * sy;
+    }
+    out.push(String(toFixed(scaled)));
+    argIdx++;
+  }
+  // Reconstruct: command letter directly followed by its coordinates
+  let result = '';
+  for (let i = 0; i < out.length; i++) {
+    const t = out[i];
+    if (/^[A-Za-z]$/.test(t)) {
+      result += t;
+    } else {
+      if (i > 0 && !/^[A-Za-z]$/.test(out[i - 1])) result += ',';
+      result += t;
+    }
+  }
+  return result;
 }
 
 const FILL_TAGS = ['solidFill', 'gradFill', 'blipFill', 'pattFill'] as const;
@@ -87,23 +145,31 @@ export async function groupToElement(
         const gTop = toFixed((el.top - chOffY) * hs);
         for (const child of el.elements) {
           const c = child as BaseElement & { left: number; top: number; width: number; height: number };
-          elements.push({
+          const scaled: any = {
             ...c,
             left: toFixed(gLeft + c.left * ws),
             top: toFixed(gTop + c.top * hs),
             width: toFixed(c.width * ws),
             height: toFixed(c.height * hs),
-          } as BaseElement);
+          };
+          if (isShape(c as Element) && (c as any).path) {
+            scaled.path = scaleSvgPath((c as any).path, ws, hs);
+          }
+          elements.push(scaled as BaseElement);
         }
       } else {
         const be = el as BaseElement & { left: number; top: number; width: number; height: number };
-        elements.push({
+        const scaled: any = {
           ...be,
           left: toFixed((be.left - chOffX) * ws),
           top: toFixed((be.top - chOffY) * hs),
           width: toFixed(be.width * ws),
           height: toFixed(be.height * hs),
-        } as BaseElement);
+        };
+        if (isShape(el) && (el as any).path) {
+          scaled.path = scaleSvgPath((el as any).path, ws, hs);
+        }
+        elements.push(scaled as BaseElement);
       }
       idx++;
     }
