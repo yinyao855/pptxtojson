@@ -15,9 +15,6 @@ import UTIF from 'utif';
 import { parseEmfContent } from './emfParser';
 import { rgbaToPngDataUrl } from './rgbaToPng';
 import { getMimeType, toDataUrl, getOrCreateBlobUrl } from './media';
-import JpegXR from 'jpegxr';
-import * as pdfjsLib from 'pdfjs-dist/legacy/build/pdf.mjs';
-import { createCanvas } from 'canvas';
 
 type UtifPage = {
   width: number;
@@ -72,7 +69,9 @@ const TRANSPARENT_PNG_DATA_URL =
 
 async function wdpToPngDataUrl(data: Uint8Array): Promise<string> {
   try {
-    const mod = await new (JpegXR as any)();
+    const jpegxrModule: any = await import('jpegxr');
+    const JpegXR = jpegxrModule.default || jpegxrModule;
+    const mod = await new JpegXR();
     const result = mod.decode(data);
     const { width, height, bytes, pixelInfo } = result;
     if (!width || !height || !bytes) return TRANSPARENT_PNG_DATA_URL;
@@ -99,7 +98,10 @@ async function wdpToPngDataUrl(data: Uint8Array): Promise<string> {
 
 async function emfPdfToPngDataUrl(pdfData: Uint8Array, targetWidth = 1024): Promise<string> {
   try {
-    const doc = await (pdfjsLib as any).getDocument({ data: pdfData, verbosity: 0 }).promise;
+    const pdfjsLib: any = await import('pdfjs-dist/legacy/build/pdf.mjs');
+    const canvasModule: any = await import('canvas');
+
+    const doc = await pdfjsLib.getDocument({ data: pdfData, verbosity: 0 }).promise;
     const page = await doc.getPage(1);
     const baseViewport = page.getViewport({ scale: 1 });
     const scale = Math.max(1, targetWidth / baseViewport.width);
@@ -107,7 +109,7 @@ async function emfPdfToPngDataUrl(pdfData: Uint8Array, targetWidth = 1024): Prom
     const w = Math.round(viewport.width);
     const h = Math.round(viewport.height);
 
-    const canvas = (createCanvas as any)(w, h);
+    const canvas = canvasModule.createCanvas(w, h);
     const canvasCtx = canvas.getContext('2d');
     canvasCtx.fillStyle = '#ffffff';
     canvasCtx.fillRect(0, 0, w, h);
