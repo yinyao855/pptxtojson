@@ -461,10 +461,9 @@ export async function renderShape(node: ShapeNodeData, ctx: RenderContext, _orde
   const width = pxToPt(minW);
   const height = pxToPt(minH);
 
-  const w = node.size.w;
-  const h = node.size.h;
-  const pathW = w;
-  const pathH = h;
+  // Path coordinates must be in pt to match the JSON width/height (PPTist viewBox).
+  const pathW = width;
+  const pathH = height;
 
   const styleNode = node.source.child('style');
   const lnRef = styleNode.exists() ? styleNode.child('lnRef') : undefined;
@@ -708,8 +707,14 @@ export async function renderShape(node: ShapeNodeData, ctx: RenderContext, _orde
   // Icon overlay in ShapeRenderer is a separate SVG <path>; JSON carries main geometry only (`pathD`).
   const pathOut: string | undefined = pathD || undefined;
 
-  const keypoints =
-    node.adjustments.size > 0 ? (Object.fromEntries(node.adjustments) as Record<string, number>) : undefined;
+  // PPTist expects keypoints normalized by /50000 (OOXML raw value / 50000).
+  let keypoints: Record<string, number> | undefined;
+  if (node.adjustments.size > 0) {
+    keypoints = {};
+    for (const [k, v] of node.adjustments) {
+      keypoints[k] = v / 50000;
+    }
+  }
 
   const baseCommon = {
     left,
