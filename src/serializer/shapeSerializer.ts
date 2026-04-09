@@ -702,7 +702,9 @@ export async function renderShape(node: ShapeNodeData, ctx: RenderContext, _orde
   const autoFit = computeAutoFit(node.textBody);
 
   const shapType =
-    isConnectorShape && node.presetGeometry === 'line' ? 'straightConnector1' : node.presetGeometry || 'rect';
+    isConnectorShape && node.presetGeometry === 'line'
+      ? 'straightConnector1'
+      : node.presetGeometry || (node.customGeometry ? 'custom' : 'rect');
 
   // Icon overlay in ShapeRenderer is a separate SVG <path>; JSON carries main geometry only (`pathD`).
   const pathOut: string | undefined = pathD || undefined;
