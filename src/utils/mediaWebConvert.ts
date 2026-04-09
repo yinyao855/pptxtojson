@@ -18,9 +18,9 @@ import { parseEmfContent } from './emfParser';
 import { rgbaToPngDataUrl } from './rgbaToPng';
 import { getMimeType, toDataUrl, getOrCreateBlobUrl } from './media';
 
-if (typeof pdfjsLib.GlobalWorkerOptions !== 'undefined') {
-  (pdfjsLib as any).GlobalWorkerOptions.workerSrc = '';
-}
+const PDFJS_CDN_VERSION = (pdfjsLib as any).version || '4.8.69';
+(pdfjsLib as any).GlobalWorkerOptions.workerSrc =
+  `https://cdn.jsdelivr.net/npm/pdfjs-dist@${PDFJS_CDN_VERSION}/legacy/build/pdf.worker.min.mjs`;
 
 type UtifPage = {
   width: number;
@@ -120,7 +120,8 @@ async function emfPdfToPngDataUrl(pdfData: Uint8Array, targetWidth = 1024): Prom
 
     await doc.destroy();
     return canvas.toDataURL('image/png');
-  } catch {
+  } catch (err) {
+    console.error('[emfPdfToPng] failed:', err);
     return TRANSPARENT_PNG_DATA_URL;
   }
 }

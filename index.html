@@ -432,7 +432,7 @@
             loadingOverlay.classList.add('show')
 
             try {
-              const json = await pptxtojson.parse(e.target.result)
+              const json = await pptxtojsonPro.parse(e.target.result)
               editor.set(json)
               console.log(json)
               jsonString = JSON.stringify(json, null, 2)
@@ -455,7 +455,7 @@
         loadingOverlay.classList.add('show')
 
         try {
-          const json = await pptxtojson.parse(file)
+          const json = await pptxtojsonPro.parse(file)
           editor.set(json)
           console.log(json)
           jsonString = JSON.stringify(json, null, 2)
