@@ -12,9 +12,15 @@
  */
 
 import UTIF from 'utif';
+import * as pdfjsLib from 'pdfjs-dist/legacy/build/pdf.mjs';
+import JpegXR from 'jpegxr';
 import { parseEmfContent } from './emfParser';
 import { rgbaToPngDataUrl } from './rgbaToPng';
 import { getMimeType, toDataUrl, getOrCreateBlobUrl } from './media';
+
+if (typeof pdfjsLib.GlobalWorkerOptions !== 'undefined') {
+  (pdfjsLib as any).GlobalWorkerOptions.workerSrc = '';
+}
 
 type UtifPage = {
   width: number;
@@ -69,9 +75,7 @@ const TRANSPARENT_PNG_DATA_URL =
 
 async function wdpToPngDataUrl(data: Uint8Array): Promise<string> {
   try {
-    const jpegxrModule: any = await import('jpegxr');
-    const JpegXR = jpegxrModule.default || jpegxrModule;
-    const mod = await new JpegXR();
+    const mod: any = await new (JpegXR as any)();
     const result = mod.decode(data);
     const { width, height, bytes, pixelInfo } = result;
     if (!width || !height || !bytes) return TRANSPARENT_PNG_DATA_URL;
@@ -98,10 +102,7 @@ async function wdpToPngDataUrl(data: Uint8Array): Promise<string> {
 
 async function emfPdfToPngDataUrl(pdfData: Uint8Array, targetWidth = 1024): Promise<string> {
   try {
-    const pdfjsLib: any = await import('pdfjs-dist/legacy/build/pdf.mjs');
-    const canvasModule: any = await import('canvas');
-
-    const doc = await pdfjsLib.getDocument({ data: pdfData, verbosity: 0 }).promise;
+    const doc = await (pdfjsLib as any).getDocument({ data: pdfData, verbosity: 0 }).promise;
     const page = await doc.getPage(1);
     const baseViewport = page.getViewport({ scale: 1 });
     const scale = Math.max(1, targetWidth / baseViewport.width);
@@ -109,18 +110,16 @@ async function emfPdfToPngDataUrl(pdfData: Uint8Array, targetWidth = 1024): Prom
     const w = Math.round(viewport.width);
     const h = Math.round(viewport.height);
 
-    const canvas = canvasModule.createCanvas(w, h);
-    const canvasCtx = canvas.getContext('2d');
-    canvasCtx.fillStyle = '#ffffff';
-    canvasCtx.fillRect(0, 0, w, h);
-    await page.render({ canvasContext: canvasCtx, viewport }).promise;
+    const canvas = document.createElement('canvas');
+    canvas.width = w;
+    canvas.height = h;
+    const ctx = canvas.getContext('2d')!;
+    ctx.fillStyle = '#ffffff';
+    ctx.fillRect(0, 0, w, h);
+    await page.render({ canvasContext: ctx, viewport }).promise;
 
-    const pngBuf: Uint8Array = canvas.toBuffer('image/png');
     await doc.destroy();
-    const base64 = arrayBufferToBase64(
-      new Uint8Array(pngBuf.buffer, (pngBuf as any).byteOffset ?? 0, pngBuf.byteLength),
-    );
-    return `data:image/png;base64,${base64}`;
+    return canvas.toDataURL('image/png');
   } catch {
     return TRANSPARENT_PNG_DATA_URL;
   }
