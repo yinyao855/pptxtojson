@@ -32,6 +32,8 @@
   "dependencies": {
     "jpegxr": "^0.3.0",
     "jszip": "^3.10.1",
+    "mathml-to-latex": "^1.5.0",
+    "omml2mathml": "^1.3.0",
     "pdfjs-dist": "4.8.69",
     "tinycolor2": "1.6.0",
     "txml": "^5.1.1",

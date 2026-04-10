@@ -5,7 +5,7 @@
 import { SafeXmlNode } from '../../parser/XmlParser';
 import { emuToPx, angleToDeg } from '../../parser/units';
 
-export type NodeType = 'shape' | 'picture' | 'table' | 'group' | 'chart' | 'unknown';
+export type NodeType = 'shape' | 'picture' | 'table' | 'group' | 'chart' | 'math' | 'unknown';
 
 export interface Position {
   x: number;

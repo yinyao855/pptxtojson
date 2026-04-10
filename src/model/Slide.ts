@@ -12,8 +12,9 @@ import { PicNodeData, parsePicNode } from './nodes/PicNode';
 import { TableNodeData, parseTableNode } from './nodes/TableNode';
 import { GroupNodeData, parseGroupNode } from './nodes/GroupNode';
 import { ChartNodeData, parseChartNode } from './nodes/ChartNode';
+import { MathNodeData, parseMathNode, isMathAlternateContent } from './nodes/MathNode';
 
-export type SlideNode = ShapeNodeData | PicNodeData | TableNodeData | GroupNodeData | ChartNodeData;
+export type SlideNode = ShapeNodeData | PicNodeData | TableNodeData | GroupNodeData | ChartNodeData | MathNodeData;
 
 export interface SlideData {
   index: number;
@@ -316,6 +317,11 @@ export function parseChildNode(
         if (olePic) return olePic;
       }
       // Non-table/chart/ole graphic frames — skip
+      return undefined;
+    case 'AlternateContent':
+      if (isMathAlternateContent(child)) {
+        return parseMathNode(child);
+      }
       return undefined;
     default:
       return undefined;

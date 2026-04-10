@@ -18,6 +18,7 @@ import { shapeToElement } from './shapeSerializer';
 import { pictureToElement } from './imageSerializer';
 import { tableToElement } from './tableSerializer';
 import { chartToElement } from './chartSerializer';
+import { mathToElement } from './mathSerializer';
 import { groupToElement, type NodeToElement } from './groupSerializer';
 import type { Slide, Element } from '../adapter/types';
 import { parseXml } from '../parser/XmlParser';
@@ -112,6 +113,8 @@ async function nodeToElement(
       return tableToElement(node, ctx, order);
     case 'chart':
       return chartToElement(node, ctx, order);
+    case 'math':
+      return mathToElement(node, ctx, order);
     case 'group':
       return groupToElement(node, ctx, order, files, nodeToElement as NodeToElement);
     default:
