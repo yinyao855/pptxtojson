@@ -860,6 +860,23 @@ export function renderTextBody(
     html += closeTag;
   }
 
+  // TODO: 后续需确定和pptist渲染的兼容性
+  // Apply bodyPr text insets (lIns/rIns/tIns/bIns) as a wrapping div with padding.
+  // OOXML defaults: lIns=91440, tIns=45720, rIns=91440, bIns=45720 (EMU).
+  const bp = textBody.bodyProperties;
+  if (bp?.exists()) {
+    const DEFAULT_H_INSET = 91440;
+    const DEFAULT_V_INSET = 45720;
+    const lIns = bp.numAttr('lIns') ?? DEFAULT_H_INSET;
+    const rIns = bp.numAttr('rIns') ?? DEFAULT_H_INSET;
+    const tIns = bp.numAttr('tIns') ?? DEFAULT_V_INSET;
+    const bIns = bp.numAttr('bIns') ?? DEFAULT_V_INSET;
+    if (lIns !== DEFAULT_H_INSET || rIns !== DEFAULT_H_INSET || tIns !== DEFAULT_V_INSET || bIns !== DEFAULT_V_INSET) {
+      const pt = (emu: number) => parseFloat((emu / 12700).toFixed(2));
+      html = `<div style="padding: ${pt(tIns)}pt ${pt(rIns)}pt ${pt(bIns)}pt ${pt(lIns)}pt;">${html}</div>`;
+    }
+  }
+
   return html;
 }
 
