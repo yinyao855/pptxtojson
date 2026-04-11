@@ -38,7 +38,7 @@ function findStyleAtLevel(styleNode: SafeXmlNode | undefined, level: number): Sa
 function getPlaceholderCategory(
   placeholder: PlaceholderInfo | undefined,
 ): 'title' | 'body' | 'other' {
-  if (!placeholder || !placeholder.type) return 'other';
+  if (!placeholder) return 'other';
   const t = placeholder.type;
   if (t === 'title' || t === 'ctrTitle') return 'title';
   if (
@@ -47,7 +47,8 @@ function getPlaceholderCategory(
     t === 'obj' ||
     t === 'dt' ||
     t === 'ftr' ||
-    t === 'sldNum'
+    t === 'sldNum' ||
+    !t
   ) {
     return 'body';
   }
