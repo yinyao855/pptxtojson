@@ -119,7 +119,7 @@ interface MergedParagraphStyle {
   bulletNone?: boolean;
   /** When set, bullet color is taken from this OOXML buClr node (a:buClr with srgbClr/schemeClr child). */
   bulletColorNode?: SafeXmlNode;
-  defRPr?: SafeXmlNode;
+  defRPrs?: SafeXmlNode[];
 }
 
 function mergeParagraphProps(target: MergedParagraphStyle, pPr: SafeXmlNode): void {
@@ -220,10 +220,13 @@ function mergeParagraphProps(target: MergedParagraphStyle, pPr: SafeXmlNode): vo
     target.bulletColorNode = buClr;
   }
 
-  // Default run properties (used as fallback for runs without rPr)
+  // Default run properties — accumulate across all inheritance levels so that
+  // an empty <a:defRPr/> at a lower level doesn't discard the sz/color set by
+  // a higher level (e.g. master titleStyle sz="4400").
   const defRPr = pPr.child('defRPr');
   if (defRPr.exists()) {
-    target.defRPr = defRPr;
+    if (!target.defRPrs) target.defRPrs = [];
+    target.defRPrs.push(defRPr);
   }
 }
 
@@ -639,9 +642,11 @@ export function renderTextBody(
     // Determine effective font size for percentage-based spacing
     // Use defRPr or first run's font size, fallback to 12pt
     let effectiveFontSize = 12; // default 12pt
-    if (merged.defRPr) {
-      const sz = merged.defRPr.numAttr('sz');
-      if (sz !== undefined) effectiveFontSize = sz / 100;
+    if (merged.defRPrs) {
+      for (const drp of merged.defRPrs) {
+        const sz = drp.numAttr('sz');
+        if (sz !== undefined) effectiveFontSize = sz / 100;
+      }
     }
     if (paragraph.runs.length > 0 && paragraph.runs[0].properties) {
       const sz = paragraph.runs[0].properties.numAttr('sz');
@@ -707,14 +712,16 @@ export function renderTextBody(
       if (merged.bulletColorNode && merged.bulletColorNode.exists()) {
         bulletColor = resolveColorToCss(merged.bulletColorNode, ctx);
       }
-      if (bulletColor === undefined && merged.defRPr && merged.defRPr.exists()) {
+      if (bulletColor === undefined && merged.defRPrs) {
         const bulletRunStyle: MergedRunStyle = {};
-        mergeRunProps(bulletRunStyle, merged.defRPr, ctx);
+        for (const drp of merged.defRPrs) mergeRunProps(bulletRunStyle, drp, ctx);
         bulletColor = bulletRunStyle.color;
       }
       if (bulletColor === undefined && paragraph.runs.length > 0) {
         const runStyle: MergedRunStyle = {};
-        if (merged.defRPr) mergeRunProps(runStyle, merged.defRPr, ctx);
+        if (merged.defRPrs) {
+          for (const drp of merged.defRPrs) mergeRunProps(runStyle, drp, ctx);
+        }
         if (paragraph.runs[0].properties)
           mergeRunProps(runStyle, paragraph.runs[0].properties, ctx);
         bulletColor = runStyle.color;
@@ -792,9 +799,9 @@ export function renderTextBody(
       // Build merged run style
       const runStyle: MergedRunStyle = {};
 
-      // Apply default run properties from merged paragraph defRPr
-      if (merged.defRPr) {
-        mergeRunProps(runStyle, merged.defRPr, ctx);
+      // Apply default run properties from all inherited defRPr nodes
+      if (merged.defRPrs) {
+        for (const drp of merged.defRPrs) mergeRunProps(runStyle, drp, ctx);
       }
 
       // Level 7: run rPr
