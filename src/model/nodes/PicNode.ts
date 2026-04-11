@@ -26,8 +26,8 @@ export interface PicNodeData extends BaseNodeData {
   mediaRId?: string;
 }
 
-/** OOXML encodes srcRect percentages as 1/100000 of full extent. */
-const CROP_DIVISOR = 100000;
+/** OOXML encodes srcRect as 1/1000th of a percent; divide by 1000 to get percentage (0–100). */
+const CROP_DIVISOR = 1000;
 
 /**
  * Parse a picture XML node (`p:pic`) into PicNodeData.

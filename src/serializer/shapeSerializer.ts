@@ -42,8 +42,29 @@ function pxToPt(px: number): number {
 // Shape blipFill (image fill) — resolve to base64 for JSON (renderer uses blob URL)
 // ---------------------------------------------------------------------------
 
-/** Resolve shape blipFill to embedded image data for JSON (e.g. slide 23 process graphic). */
-async function resolveShapeBlipUrl(blipFill: SafeXmlNode, ctx: RenderContext): Promise<string | null> {
+/** Resolve blip opacity from alphaModFix / alphaMod / alphaOff modifiers. */
+function resolveBlipOpacity(blip: SafeXmlNode): number {
+  let alpha = 1;
+  const alphaModFix = blip.child('alphaModFix');
+  if (alphaModFix.exists()) {
+    alpha *= (alphaModFix.numAttr('amt') ?? 100000) / 100000;
+  }
+  const alphaMod = blip.child('alphaMod');
+  if (alphaMod.exists()) {
+    alpha *= (alphaMod.numAttr('val') ?? 100000) / 100000;
+  }
+  const alphaOff = blip.child('alphaOff');
+  if (alphaOff.exists()) {
+    alpha += (alphaOff.numAttr('val') ?? 0) / 100000;
+  }
+  return Math.max(0, Math.min(1, alpha));
+}
+
+/** Resolve shape blipFill to embedded image data + opacity for JSON. */
+async function resolveShapeBlipFill(
+  blipFill: SafeXmlNode,
+  ctx: RenderContext,
+): Promise<{ url: string; opacity: number } | null> {
   const blip = blipFill.child('blip');
   const embedId = blip.attr('embed') ?? blip.attr('r:embed');
   if (!embedId) return null;
@@ -53,7 +74,10 @@ async function resolveShapeBlipUrl(blipFill: SafeXmlNode, ctx: RenderContext): P
   const mediaPath = resolveRelTarget(basePath, rel.target);
   const data = ctx.presentation.media.get(mediaPath);
   if (!data) return null;
-  return resolveMediaToUrl(mediaPath, data, ctx.mediaMode, ctx.mediaUrlCache);
+  const url = await resolveMediaToUrl(mediaPath, data, ctx.mediaMode, ctx.mediaUrlCache);
+  if (!url) return null;
+  const opacity = resolveBlipOpacity(blip);
+  return { url, opacity };
 }
 
 // ---------------------------------------------------------------------------
@@ -94,7 +118,9 @@ function svgDashArrayForKind(dashKind: string, strokeWidth: number): string | nu
   }
 }
 
-function parseCssColorToRgb(color: string): { r: number; g: number; b: number } | null {
+function parseCssColorToRgba(
+  color: string,
+): { r: number; g: number; b: number; a?: number } | null {
   if (!color) return null;
   const hex = color.trim();
   if (hex.startsWith('#')) {
@@ -104,11 +130,15 @@ function parseCssColorToRgb(color: string): { r: number; g: number; b: number } 
   if (!m) return null;
   const parts = m[1].split(',').map((s) => Number.parseFloat(s.trim()));
   if (parts.length < 3 || parts.some((v) => Number.isNaN(v))) return null;
-  return {
+  const result: { r: number; g: number; b: number; a?: number } = {
     r: Math.max(0, Math.min(255, parts[0])),
     g: Math.max(0, Math.min(255, parts[1])),
     b: Math.max(0, Math.min(255, parts[2])),
   };
+  if (parts.length >= 4 && parts[3] < 1) {
+    result.a = parts[3];
+  }
+  return result;
 }
 
 /** Read headEnd/tailEnd from an OOXML a:ln node (e.g. theme line style). */
@@ -165,10 +195,19 @@ function cssColorToFillHex(css: string): string {
       const b = s[3];
       return `#${r}${r}${g}${g}${b}${b}`;
     }
-    return s.length >= 7 ? s.slice(0, 7) : s;
+    return s;
   }
-  const rgb = parseCssColorToRgb(s);
-  if (rgb) return rgbToHex(rgb.r, rgb.g, rgb.b);
+  const rgba = parseCssColorToRgba(s);
+  if (rgba) {
+    const hex = rgbToHex(rgba.r, rgba.g, rgba.b);
+    if (rgba.a !== undefined) {
+      const alphaHex = Math.round(rgba.a * 255)
+        .toString(16)
+        .padStart(2, '0');
+      return `${hex}${alphaHex}`;
+    }
+    return hex;
+  }
   return '#000000';
 }
 
@@ -208,9 +247,12 @@ async function fillToJson(
 
   const blipFill = spPr.child('blipFill');
   if (blipFill.exists()) {
-    const pic = await resolveShapeBlipUrl(blipFill, ctx);
-    if (pic) {
-      const imageFill: ImageFill = { type: 'image', value: { picBase64: pic, opacity: 1 } };
+    const blipResult = await resolveShapeBlipFill(blipFill, ctx);
+    if (blipResult) {
+      const imageFill: ImageFill = {
+        type: 'image',
+        value: { picBase64: blipResult.url, opacity: blipResult.opacity },
+      };
       return imageFill;
     }
   }
