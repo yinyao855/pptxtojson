@@ -13,6 +13,63 @@ import { emuToPx, pctToDecimal, angleToDeg } from '../parser/units';
 import { isAllowedExternalUrl } from '../utils/urlSafety';
 
 // ---------------------------------------------------------------------------
+// Wingdings / Symbol Font → Unicode Mapping
+// ---------------------------------------------------------------------------
+
+const SYMBOL_FONTS = new Set([
+  'wingdings',
+  'wingdings 2',
+  'wingdings 3',
+  'symbol',
+  'webdings',
+]);
+
+function isSymbolFont(fontName: string | undefined): boolean {
+  return !!fontName && SYMBOL_FONTS.has(fontName.toLowerCase());
+}
+
+const WINGDINGS: Record<number, string> = {
+  0x66: '●', 0x67: '●', 0x6C: '●', 0x6D: '○', 0x6E: '■', 0x6F: '□',
+  0x71: '✕', 0x72: '✓', 0x73: '☐', 0x74: '⬥', 0x75: '◆', 0x76: '❖',
+  0x77: '⬜', 0x9C: '●', 0x9D: '○', 0x9E: '■', 0x9F: '□',
+  0xA1: '✡', 0xA7: '✺', 0xAB: '⇨', 0xE8: '➔', 0xFC: '●',
+  0xA8: '✶', 0xAA: '⇦', 0xAC: '⇧', 0xAD: '⇩',
+};
+
+const WINGDINGS2: Record<number, string> = {
+  0x9E: '◉', 0x9F: '⊙', 0x62: '①', 0x63: '②', 0x64: '③',
+  0x65: '④', 0x66: '⑤', 0x67: '⑥', 0x68: '⑦', 0x69: '⑧',
+  0x6A: '⑨', 0x6B: '⑩', 0x98: '⬥', 0x99: '◇', 0xA3: '✦',
+  0xF0: '●', 0xF1: '○', 0xF2: '◉', 0xF3: '◎',
+};
+
+const WINGDINGS3: Record<number, string> = {
+  0x7D: '▶', 0x7E: '◀', 0x7B: '▲', 0x7C: '▼',
+  0x75: '►', 0x76: '◄', 0x77: '▸', 0x78: '◂',
+};
+
+const SYMBOL: Record<number, string> = {
+  0xB7: '•', 0xD8: '≠', 0xB3: '≥', 0xA3: '≤',
+  0xAE: '®', 0xA9: '©', 0xC6: '…',
+};
+
+function symbolFontCharToUnicode(char: string, fontName: string): string {
+  if (!char || char.length === 0) return char;
+  const font = fontName.toLowerCase();
+  let code = char.codePointAt(0) ?? 0;
+  if (code >= 0xF000 && code <= 0xF0FF) code -= 0xF000;
+
+  let table: Record<number, string> | undefined;
+  if (font === 'wingdings') table = WINGDINGS;
+  else if (font === 'wingdings 2') table = WINGDINGS2;
+  else if (font === 'wingdings 3') table = WINGDINGS3;
+  else if (font === 'symbol') table = SYMBOL;
+
+  if (table && table[code]) return table[code];
+  return '•';
+}
+
+// ---------------------------------------------------------------------------
 // Style Inheritance Helpers
 // ---------------------------------------------------------------------------
 
@@ -118,6 +175,8 @@ interface MergedParagraphStyle {
   bulletFont?: string;
   bulletAutoNum?: string;
   bulletNone?: boolean;
+  /** buSzPct: bullet size as percentage of font size (e.g. 73000 → 0.73). */
+  bulletSizePct?: number;
   /** When set, bullet color is taken from this OOXML buClr node (a:buClr with srgbClr/schemeClr child). */
   bulletColorNode?: SafeXmlNode;
   defRPrs?: SafeXmlNode[];
@@ -214,6 +273,11 @@ function mergeParagraphProps(target: MergedParagraphStyle, pPr: SafeXmlNode): vo
   const buFont = pPr.child('buFont');
   if (buFont.exists()) {
     target.bulletFont = buFont.attr('typeface');
+  }
+  const buSzPct = pPr.child('buSzPct');
+  if (buSzPct.exists()) {
+    const val = buSzPct.numAttr('val');
+    if (val !== undefined) target.bulletSizePct = val / 100000;
   }
   // Explicit bullet color (a:buClr); when present overrides defRPr for bullet color
   const buClr = pPr.child('buClr');
@@ -743,10 +807,23 @@ export function renderTextBody(
       }
       const bColor =
         bulletColor ?? options?.fontRefColor ?? options?.cellTextColor ?? '#000000';
-      const bFont = merged.bulletFont
-        ? `font-family: ${merged.bulletFont};`
-        : '';
-      html += `<span style="${bFont}color: ${bColor};">${escapeHtml(bulletPrefix)} </span>`;
+
+      let displayChar = bulletPrefix;
+      let bFontCss = '';
+      if (merged.bulletFont && isSymbolFont(merged.bulletFont)) {
+        displayChar = symbolFontCharToUnicode(bulletPrefix, merged.bulletFont);
+      } else if (merged.bulletFont) {
+        bFontCss = `font-family: ${merged.bulletFont};`;
+      }
+
+      let bSizeCss = '';
+      if (merged.bulletSizePct !== undefined && merged.bulletSizePct !== 1) {
+        const runFontSize = effectiveFontSize;
+        const bulletPt = runFontSize * merged.bulletSizePct;
+        bSizeCss = `font-size: ${bulletPt.toFixed(1)}pt;`;
+      }
+
+      html += `<span style="${bFontCss}${bSizeCss}color: ${bColor};">${escapeHtml(displayChar)} </span>`;
     }
 
     // ---- Render runs ----
