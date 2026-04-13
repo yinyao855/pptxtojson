@@ -198,7 +198,7 @@ function applyExtLstImageEffectsToFilters(blip: SafeXmlNode, out: NonNullable<Im
 }
 
 /**
- * Resolve a media URL from a relationship ID.
+ * Resolve a media blob URL from a relationship ID.
  */
 async function resolveMediaUrl(rId: string | undefined, ctx: RenderContext): Promise<string | undefined> {
   if (!rId) return undefined;
@@ -216,7 +216,7 @@ async function resolveMediaUrl(rId: string | undefined, ctx: RenderContext): Pro
   const data = ctx.presentation.media.get(mediaPath);
   if (!data) return undefined;
 
-  return resolveMediaToUrl(mediaPath, data, ctx.mediaMode, ctx.mediaUrlCache);
+  return resolveMediaToUrl(mediaPath, data, 'blob', ctx.mediaUrlCache);
 }
 
 /**
