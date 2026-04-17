@@ -640,6 +640,7 @@ export function renderTextBody(
 
   const category = getPlaceholderCategory(placeholder);
   let bulletCounter = 0;
+  const noWrap = textBody.bodyProperties?.attr('wrap') === 'none';
 
   let html = '';
 
@@ -768,6 +769,9 @@ export function renderTextBody(
     if (paragraph.runs.some((r) => r.text?.includes('\t'))) {
       const defaultTabPx = 96; // 914400 EMU at 96 dpi
       paraCssParts.push(`tab-size: ${defaultTabPx}px`);
+    }
+    if (noWrap) {
+      paraCssParts.push('white-space: nowrap');
     }
     const useLineWrappers = !!(merged.lineHeightAbsolute && hasLineBreaks && merged.lineHeight);
 
@@ -964,9 +968,9 @@ export function renderTextBody(
     html += closeTag;
   }
 
-  // TODO: 后续需确定和pptist渲染的兼容性
   // Apply bodyPr text insets (lIns/rIns/tIns/bIns) as a wrapping div with padding.
   // OOXML defaults: lIns=91440, tIns=45720, rIns=91440, bIns=45720 (EMU).
+  // Always emit the padding wrapper so the consumer doesn't need to know defaults.
   const bp = textBody.bodyProperties;
   if (bp?.exists()) {
     const DEFAULT_H_INSET = 91440;
@@ -975,10 +979,8 @@ export function renderTextBody(
     const rIns = bp.numAttr('rIns') ?? DEFAULT_H_INSET;
     const tIns = bp.numAttr('tIns') ?? DEFAULT_V_INSET;
     const bIns = bp.numAttr('bIns') ?? DEFAULT_V_INSET;
-    if (lIns !== DEFAULT_H_INSET || rIns !== DEFAULT_H_INSET || tIns !== DEFAULT_V_INSET || bIns !== DEFAULT_V_INSET) {
-      const pt = (emu: number) => parseFloat((emu / 12700).toFixed(2));
-      html = `<div style="padding: ${pt(tIns)}pt ${pt(rIns)}pt ${pt(bIns)}pt ${pt(lIns)}pt;">${html}</div>`;
-    }
+    const pt = (emu: number) => parseFloat((emu / 12700).toFixed(2));
+    html = `<div style="padding: ${pt(tIns)}pt ${pt(rIns)}pt ${pt(bIns)}pt ${pt(lIns)}pt;">${html}</div>`;
   }
 
   return html;
