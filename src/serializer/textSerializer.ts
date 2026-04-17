@@ -32,8 +32,15 @@ const WINGDINGS: Record<number, string> = {
   0x66: '●', 0x67: '●', 0x6C: '●', 0x6D: '○', 0x6E: '■', 0x6F: '□',
   0x71: '✕', 0x72: '✓', 0x73: '☐', 0x74: '⬥', 0x75: '◆', 0x76: '❖',
   0x77: '⬜', 0x9C: '●', 0x9D: '○', 0x9E: '■', 0x9F: '□',
-  0xA1: '✡', 0xA7: '✺', 0xAB: '⇨', 0xE8: '➔', 0xFC: '●',
+  0xA1: '✡', 0xA7: '✺', 0xAB: '⇨', 0xFC: '●',
   0xA8: '✶', 0xAA: '⇦', 0xAC: '⇧', 0xAD: '⇩',
+  // Arrows
+  0xE0: '→', 0xE1: '←', 0xE2: '↑', 0xE3: '↓',
+  0xE4: '↔', 0xE5: '↕', 0xE6: '⇒', 0xE7: '⇐',
+  0xE8: '⇑', 0xE9: '⇓', 0xEA: '⇔', 0xEB: '⇕',
+  0xEF: '➔',
+  // Miscellaneous
+  0xD5: '✉', 0xD6: '☛', 0xD7: '☞', 0xD8: '✌', 0xFB: '⚫',
 };
 
 const WINGDINGS2: Record<number, string> = {
@@ -902,8 +909,20 @@ export function renderTextBody(
         }
       }
 
-      const inner = formatRunTextForHtml(run.text ?? '');
-      const tabStyleSuffix = run.text?.includes('\t') ? ';white-space: pre' : '';
+      let runText = run.text ?? '';
+      if (run.properties) {
+        const symNode = run.properties.child('sym');
+        if (symNode.exists()) {
+          const symTypeface = symNode.attr('typeface');
+          if (isSymbolFont(symTypeface)) {
+            runText = Array.from(runText)
+              .map((ch) => symbolFontCharToUnicode(ch, symTypeface!))
+              .join('');
+          }
+        }
+      }
+      const inner = formatRunTextForHtml(runText);
+      const tabStyleSuffix = runText.includes('\t') ? ';white-space: pre' : '';
 
       const styleStr = runStylesToCssString(runStyle, run, options, ctx) + tabStyleSuffix;
       const isLink = !!runStyle.hlinkClick;
