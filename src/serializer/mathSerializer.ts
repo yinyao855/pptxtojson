@@ -125,12 +125,13 @@ function normalizeOmmlXml(xml: string): string {
 //   - Mathematical Bold Digits or other leftover Unicode
 
 function postProcessLatex(latex: string): string {
-  // Replace HTML entities
+  // Replace HTML entities and known wrong ASCII expansions from mathml-to-latex
   let result = latex
     .replace(/&nbsp;/g, '\\,')
     .replace(/&lt;/g, '<')
     .replace(/&gt;/g, '>')
-    .replace(/&amp;/g, '&');
+    .replace(/&amp;/g, '&')
+    .replace(/\+-/g, '\\mp ');
 
   // Replace Unicode characters
   const chars = Array.from(result);
