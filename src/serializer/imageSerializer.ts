@@ -8,8 +8,10 @@ import { SafeXmlNode } from '../parser/XmlParser';
 import { resolveMediaToUrl } from '../utils/mediaWebConvert';
 import { lineStyleToBorder } from './borderMapper';
 import type { Image, Video, Audio } from '../adapter/types';
-import { resolveMediaPath } from '../utils/media';
+import { getMimeType, resolveMediaPath, toDataUrl } from '../utils/media';
 import { isAllowedExternalUrl } from '../utils/urlSafety';
+import { resolveColor } from './StyleResolver';
+import { hexToRgb } from '../utils/color';
 
 const PX_TO_PT = 0.75;
 
@@ -277,6 +279,95 @@ async function renderAudio(
   };
 }
 
+// ---------------------------------------------------------------------------
+// a:clrChange — pixel-level color replacement (chroma key)
+// ---------------------------------------------------------------------------
+
+function bytesToDataUrl(bytes: Uint8Array, mediaPath: string): string {
+  let binary = '';
+  for (let i = 0; i < bytes.length; i++) binary += String.fromCharCode(bytes[i]);
+  let base64: string;
+  if (typeof btoa !== 'undefined') {
+    base64 = btoa(binary);
+  } else {
+    const NodeBuffer = (globalThis as unknown as { Buffer?: { from(a: Uint8Array): { toString(e: string): string } } }).Buffer;
+    base64 = NodeBuffer ? NodeBuffer.from(bytes).toString('base64') : '';
+  }
+  return toDataUrl(base64, getMimeType(mediaPath));
+}
+
+function loadImageElement(dataUrl: string): Promise<HTMLImageElement | null> {
+  return new Promise((resolve) => {
+    const img = document.createElement('img');
+    img.onload = () => resolve(img);
+    img.onerror = () => resolve(null);
+    img.src = dataUrl;
+  });
+}
+
+/**
+ * Apply `a:clrChange` effect: replace pixels matching `clrFrom` with `clrTo`.
+ * Falls back to the original URL if Canvas is unavailable or decoding fails.
+ */
+async function applyClrChange(
+  mediaData: Uint8Array | ArrayBuffer,
+  mediaPath: string,
+  clrChange: SafeXmlNode,
+  ctx: RenderContext,
+): Promise<string> {
+  const clrFromNode = clrChange.child('clrFrom');
+  const clrToNode = clrChange.child('clrTo');
+  if (!clrFromNode.exists() || !clrToNode.exists()) {
+    return resolveMediaToUrl(mediaPath, mediaData, ctx.mediaMode, ctx.mediaUrlCache);
+  }
+
+  const fromColor = resolveColor(clrFromNode, ctx);
+  const toColor = resolveColor(clrToNode, ctx);
+  const fromRgb = hexToRgb(fromColor.color);
+  const toRgb = hexToRgb(toColor.color);
+  const toAlpha = Math.round(toColor.alpha * 255);
+
+  try {
+    const bytes = mediaData instanceof Uint8Array ? mediaData : new Uint8Array(mediaData);
+    const dataUrl = bytesToDataUrl(bytes, mediaPath);
+    const img = await loadImageElement(dataUrl);
+    if (!img) {
+      return resolveMediaToUrl(mediaPath, mediaData, ctx.mediaMode, ctx.mediaUrlCache);
+    }
+
+    const canvas = document.createElement('canvas');
+    canvas.width = img.width;
+    canvas.height = img.height;
+    const c2d = canvas.getContext('2d');
+    if (!c2d) {
+      return resolveMediaToUrl(mediaPath, mediaData, ctx.mediaMode, ctx.mediaUrlCache);
+    }
+
+    c2d.drawImage(img, 0, 0);
+    const imageData = c2d.getImageData(0, 0, canvas.width, canvas.height);
+    const pixels = imageData.data;
+
+    const COLOR_TOLERANCE = 12;
+    for (let i = 0; i < pixels.length; i += 4) {
+      const dist =
+        Math.abs(pixels[i] - fromRgb.r) +
+        Math.abs(pixels[i + 1] - fromRgb.g) +
+        Math.abs(pixels[i + 2] - fromRgb.b);
+      if (dist <= COLOR_TOLERANCE) {
+        pixels[i] = toRgb.r;
+        pixels[i + 1] = toRgb.g;
+        pixels[i + 2] = toRgb.b;
+        pixels[i + 3] = toAlpha;
+      }
+    }
+
+    c2d.putImageData(imageData, 0, 0);
+    return canvas.toDataURL('image/png');
+  } catch {
+    return resolveMediaToUrl(mediaPath, mediaData, ctx.mediaMode, ctx.mediaUrlCache);
+  }
+}
+
 /**
  * Render an image element.
  */
@@ -305,7 +396,16 @@ async function renderImage(
     return buildImage(node, ctx, order, box, src, undefined);
   }
 
-  src = await resolveMediaToUrl(mediaPath, data, ctx.mediaMode, ctx.mediaUrlCache);
+  const blipFill = node.source.child('blipFill');
+  const blip = blipFill.exists() ? blipFill.child('blip') : node.source.child('__none__');
+  const clrChange = blip.exists() ? blip.child('clrChange') : node.source.child('__none__');
+
+  if (clrChange.exists()) {
+    src = await applyClrChange(data, mediaPath, clrChange, ctx);
+  } else {
+    src = await resolveMediaToUrl(mediaPath, data, ctx.mediaMode, ctx.mediaUrlCache);
+  }
+
   return buildImage(node, ctx, order, box, src, buildImageFilters(node));
 }
 
