@@ -510,10 +510,6 @@ export function tableToElement(
 
   const data: OutCell[][] = node.rows.map((row, rowIdx) =>
     row.cells.map((cell, colIdx): OutCell => {
-      const text = cell.textBody
-        ? renderTextBody(cell.textBody, undefined, ctx)
-        : '';
-
       // --- Style sections cascade (wholeTbl → band → firstRow/lastRow/firstCol/lastCol) ---
       const sections = tblStyle
         ? getStyleSections(tblStyle, rowIdx, colIdx, totalRows, totalCols, tblPr)
@@ -543,6 +539,18 @@ export function tableToElement(
 
       // Text props from tcTxStyle
       const textProps = sections.length > 0 ? getEffectiveTableStyleTextProps(sections, ctx) : undefined;
+
+      // Render HTML text with table style tcTxStyle applied as defaults
+      // (run-level rPr still overrides — e.g. user-set red text on a white
+      // header cell still shows red). This keeps HTML <span> color/bold in
+      // sync with cell.fontColor/fontBold metadata so downstream renderers
+      // that read span.style.color first (pptist) render correctly.
+      const text = cell.textBody
+        ? renderTextBody(cell.textBody, undefined, ctx, {
+            cellTextColor: textProps?.color,
+            cellTextBold: textProps?.bold,
+          })
+        : '';
 
       // Direct cell tcPr overrides (highest priority)
       // Mirrors TableRenderer.ts applyCellProperties (line 538)
