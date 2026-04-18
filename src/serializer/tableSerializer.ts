@@ -582,7 +582,14 @@ export function tableToElement(
     }),
   );
 
-  const rowHeights = node.rows.map((r) => pxToPt(r.height));
+  let rowHeights = node.rows.map((r) => pxToPt(r.height));
+  // Fallback: when every row has h="0" in source XML (PowerPoint "auto row
+  // height" mode), distribute the table's total height evenly across rows so
+  // downstream renderers don't have to implement auto-fit logic themselves.
+  if (rowHeights.length > 0 && rowHeights.every((h) => h === 0)) {
+    const evenHeight = Number((height / rowHeights.length).toFixed(4));
+    rowHeights = rowHeights.map(() => evenHeight);
+  }
   const colWidths = node.columns.map((c) => pxToPt(c));
   const actualTableWidth = colWidths.reduce((sum, w) => sum + w, 0);
 
