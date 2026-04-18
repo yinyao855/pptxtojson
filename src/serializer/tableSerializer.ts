@@ -384,12 +384,13 @@ function applyStyleBorders(
 
 // ---------------------------------------------------------------------------
 // Direct cell properties from tcPr — mirrors TableRenderer.ts applyCellProperties (line 538)
-// Returns fill + border data instead of mutating DOM.
-// Margins/anchor are rendering concerns, not included in JSON output.
+// Returns fill + border + vertical-anchor data instead of mutating DOM.
+// (Margins are still rendering concerns and remain unexposed.)
 // ---------------------------------------------------------------------------
 
 interface CellDirectProps {
   fillColor?: string;
+  vAlign?: 'up' | 'mid' | 'down';
   borders: Partial<Record<BorderSide, Border | null>>;
 }
 
@@ -398,6 +399,13 @@ function applyCellProperties(
   ctx: RenderContext,
 ): CellDirectProps {
   const result: CellDirectProps = { borders: {} };
+
+  // Vertical text alignment. OOXML spec: `t` (top, default), `ctr` (middle),
+  // `b` (bottom). We follow the same vocabulary as Shape/Text vAlign.
+  const anchor = tcPr.attr('anchor');
+  if (anchor === 'ctr') result.vAlign = 'mid';
+  else if (anchor === 'b') result.vAlign = 'down';
+  else if (anchor === 't') result.vAlign = 'up';
 
   // Fill (overrides table style fill)
   const solidFill = tcPr.child('solidFill');
@@ -554,11 +562,13 @@ export function tableToElement(
 
       // Direct cell tcPr overrides (highest priority)
       // Mirrors TableRenderer.ts applyCellProperties (line 538)
+      let vAlign: 'up' | 'mid' | 'down' | undefined;
       const tcPr = cell.properties;
       if (tcPr?.exists()) {
         const cellProps = applyCellProperties(tcPr, ctx);
 
         if (cellProps.fillColor) fillColor = cellProps.fillColor;
+        if (cellProps.vAlign) vAlign = cellProps.vAlign;
 
         for (const side of ['top', 'bottom', 'left', 'right'] as const) {
           const val = cellProps.borders[side];
@@ -585,6 +595,7 @@ export function tableToElement(
       if (fillColor) outCell.fillColor = fillColor;
       if (textProps?.color) outCell.fontColor = textProps.color;
       if (textProps?.bold) outCell.fontBold = textProps.bold;
+      if (vAlign) outCell.vAlign = vAlign;
 
       return outCell;
     }),

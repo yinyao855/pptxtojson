@@ -153,6 +153,11 @@ export interface TableCell {
   fillColor?: string
   fontColor?: string
   fontBold?: boolean
+  /**
+   * Vertical text alignment within the cell, parsed from `<a:tcPr anchor="...">`.
+   * Field is only present when the source XML explicitly sets `anchor`.
+   */
+  vAlign?: 'up' | 'mid' | 'down'
   borders: {
     top?: Border
     bottom?: Border
