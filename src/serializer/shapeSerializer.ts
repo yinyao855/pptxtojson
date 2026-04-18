@@ -495,11 +495,13 @@ export async function renderShape(node: ShapeNodeData, ctx: RenderContext, _orde
       presetKey.includes('connector') ||
       outlineOnlyPresets.has(presetKey));
   const isConnectorShape = node.source.localName === 'cxnSp';
+  // Treat sub-pixel extents as flat — some PPTX shapes use cx=1 EMU (≈0.0001px)
+  // for nearly perfect vertical/horizontal lines, which still need a visible viewBox.
   const flatExtent =
-    (node.size.w > 0 && node.size.h === 0) || (node.size.w === 0 && node.size.h > 0);
+    (node.size.w >= 1 && node.size.h < 1) || (node.size.w < 1 && node.size.h >= 1);
   const isLineLike = presetIsLine || isConnectorShape || flatExtent;
-  const minH = isLineLike && node.size.h === 0 ? 1 : node.size.h;
-  const minW = isLineLike && node.size.w === 0 ? 1 : node.size.w;
+  const minH = isLineLike && node.size.h < 1 ? 1 : node.size.h;
+  const minW = isLineLike && node.size.w < 1 ? 1 : node.size.w;
   const width = pxToPt(minW);
   const height = pxToPt(minH);
 

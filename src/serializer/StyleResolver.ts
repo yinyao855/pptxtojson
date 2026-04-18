@@ -612,6 +612,12 @@ export function resolveLineStyle(
     }
   }
 
+  // OOXML default line width: when <a:ln> has explicit stroke info (color or dash)
+  // but no `w` attribute (and no theme width), use 9525 EMU (0.75pt = 1px) per spec.
+  if (width === 0 && (color !== 'transparent' || prstDash.exists())) {
+    width = emuToPx(9525);
+  }
+
   return { width, color, dash, dashKind };
 }
 
