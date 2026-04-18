@@ -2780,30 +2780,40 @@ presetShapes.set('wedgeRoundRectCallout', (w, h, adjustments) => {
 });
 
 presetShapes.set('wedgeEllipseCallout', (w, h, adjustments) => {
+  // OOXML preset definition (ECMA-376):
+  //   dxPos = w * adj1 / 100000;  dyPos = h * adj2 / 100000
+  //   xPos  = w/2 + dxPos;        yPos  = h/2 + dyPos
+  //   pang  = atan2(dyPos*w, dxPos*h)   ← ellipse-aspect-corrected angle
+  //   gap   = ±11° around pang on the ellipse perimeter
   const ax = adj(adjustments, 'adj1', -20833);
   const ay = adj(adjustments, 'adj2', 62500);
   const rx = w / 2;
   const ry = h / 2;
-  const tipX = rx + w * ax;
-  const tipY = ry + h * ay;
-  // Approximate: ellipse with a pointer
-  const angle = Math.atan2(tipY - ry, tipX - rx);
-  const gapAngle = 0.15;
-  const _x1 = rx + rx * Math.cos(angle - gapAngle);
-  const _y1 = ry + ry * Math.sin(angle - gapAngle);
-  const _x2 = rx + rx * Math.cos(angle + gapAngle);
-  const _y2 = ry + ry * Math.sin(angle + gapAngle);
+  const dxPos = w * ax;
+  const dyPos = h * ay;
+  const xPos = rx + dxPos;
+  const yPos = ry + dyPos;
+  // Use ellipse-aspect-corrected angle so the gap sits on the perimeter
+  // pointing toward the tip — without this, on wide/short ellipses the gap
+  // ends up offset to the side instead of opposite the tip.
+  const pang = Math.atan2(dyPos * w, dxPos * h);
+  const halfGap = (11 * Math.PI) / 180;
+  const stAng = pang + halfGap;
+  const enAng = pang - halfGap;
+  const x1 = rx + rx * Math.cos(stAng);
+  const y1 = ry + ry * Math.sin(stAng);
+  const x2 = rx + rx * Math.cos(enAng);
+  const y2 = ry + ry * Math.sin(enAng);
+  // Path: start at one side of the gap → line to tip → line to other side
+  // → arc the long way around back to start.
+  // Arc the long way around from (x2,y2) back to (x1,y1) along the rest of
+  // the ellipse perimeter (the side opposite the tail). Use SVG arc directly
+  // with large-arc=1 and sweep=0 (CCW) so the gap stays at the tip side.
   return [
-    shapeArc(
-      rx,
-      ry,
-      rx,
-      ry,
-      ((angle + gapAngle) * 180) / Math.PI,
-      ((angle - gapAngle + 2 * Math.PI) * 180) / Math.PI,
-      false,
-    ),
-    `L${tipX},${tipY}`,
+    `M${x1},${y1}`,
+    `L${xPos},${yPos}`,
+    `L${x2},${y2}`,
+    `A${rx},${ry} 0 1,0 ${x1},${y1}`,
     'Z',
   ].join(' ');
 });
