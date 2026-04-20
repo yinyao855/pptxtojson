@@ -142,6 +142,7 @@ export type NodeToElement = (
 type ChildEl = BaseElement & {
   left: number; top: number; width: number; height: number;
   rotate?: number; isFlipH?: boolean; isFlipV?: boolean;
+  shapType?: string; path?: string;
 };
 
 type BakedTransform = {
@@ -204,12 +205,10 @@ function bakeGroupTransform(
  * 把横线画成对角斜线。这里只缩放线段的方向轴，垂直轴保留原 stroke 厚度。
  */
 function sizeScaleForChild(c: ChildEl, ws: number, hs: number): { sw: number; sh: number } {
-  if (!isShape(c as unknown as Element)) return { sw: ws, sh: hs };
-  const shapType = (c as any).shapType;
-  if (shapType !== 'line' && shapType !== 'straightConnector1') return { sw: ws, sh: hs };
-  const path: string | undefined = (c as any).path;
-  if (!path) return { sw: ws, sh: hs };
-  const orient = detectLineOrientation(path);
+  if (c.type !== 'shape') return { sw: ws, sh: hs };
+  if (c.shapType !== 'line' && c.shapType !== 'straightConnector1') return { sw: ws, sh: hs };
+  if (!c.path) return { sw: ws, sh: hs };
+  const orient = detectLineOrientation(c.path);
   if (orient === 'horizontal') return { sw: ws, sh: 1 };
   if (orient === 'vertical') return { sw: 1, sh: hs };
   return { sw: ws, sh: hs };
