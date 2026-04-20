@@ -815,6 +815,10 @@ export async function renderShape(node: ShapeNodeData, ctx: RenderContext, _orde
       outputAsText = false;
     } else if (!hasPresetGeom && !hasContent) {
       outputAsText = false;
+    } else if (hasPresetGeom && hasFillOrBorder) {
+      // 带文字+填充的非占位符 rect 是色块 banner，按 shape 输出
+      // 以保留原始 width × height（与 src1 行为一致）。
+      outputAsText = false;
     } else {
       outputAsText = true;
     }
