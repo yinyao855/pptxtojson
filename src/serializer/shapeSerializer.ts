@@ -500,21 +500,28 @@ export async function renderShape(node: ShapeNodeData, ctx: RenderContext, _orde
   const flatExtent =
     (node.size.w >= 1 && node.size.h < 1) || (node.size.w < 1 && node.size.h >= 1);
   const isLineLike = presetIsLine || isConnectorShape || flatExtent;
-  const minH = isLineLike && node.size.h < 1 ? 1 : node.size.h;
-  const minW = isLineLike && node.size.w < 1 ? 1 : node.size.w;
+  // 判定线段方向：水平 ('h')、垂直 ('v') 或对角线 (null)。
+  // 仅对 line-like preset 生效；用于决定哪一轴需要 bump。
+  let lineOrient: 'h' | 'v' | null = null;
+  if (isLineLike) {
+    if (node.size.h === 0 || (node.size.w >= 1 && node.size.h < 1)) lineOrient = 'h';
+    else if (node.size.w === 0 || (node.size.h >= 1 && node.size.w < 1)) lineOrient = 'v';
+  }
+
+  // 仅 bump 与线段方向"垂直"的那一轴，保证 SVG viewBox 非退化、stroke 可见；
+  // 沿线段方向的轴不 bump，避免在 group 内被 ws/hs 放大后 bbox 异常巨大
+  // （下游按 bbox 对角线渲染 line 的渲染器会把横线画成对角斜线）。
+  const minH = isLineLike && node.size.h < 1 && lineOrient !== 'v' ? 1 : node.size.h;
+  const minW = isLineLike && node.size.w < 1 && lineOrient !== 'h' ? 1 : node.size.w;
   const width = pxToPt(minW);
   const height = pxToPt(minH);
 
-  // Path coordinates must be in pt to match the JSON width/height (PPTist viewBox).
-  // 对线段类 preset，若原始 size 在某轴上为 0（或接近 0、远小于另一轴），
   // 给 preset 传 0 以保留水平/垂直方向语义，否则 bump 后的非零 h/w 会让
-  // line preset 误走对角线分支（在被 group 大幅缩放时表现为 V 字折线）。
+  // line preset 误走对角线分支。
   let pathW = width;
   let pathH = height;
-  if (isLineLike) {
-    if (node.size.h === 0 || (node.size.w >= 1 && node.size.h < 1)) pathH = 0;
-    else if (node.size.w === 0 || (node.size.h >= 1 && node.size.w < 1)) pathW = 0;
-  }
+  if (lineOrient === 'h') pathH = 0;
+  else if (lineOrient === 'v') pathW = 0;
 
   const styleNode = node.source.child('style');
   const lnRef = styleNode.exists() ? styleNode.child('lnRef') : undefined;

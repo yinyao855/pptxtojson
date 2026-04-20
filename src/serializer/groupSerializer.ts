@@ -33,6 +33,42 @@ function toFixed(n: number): number {
 }
 
 /**
+ * 解析 SVG path 中的所有 (x,y) 坐标，判定该 path 是水平直线、垂直直线还是其它。
+ * 仅用于识别 line / straightConnector1 这类单段线段。
+ */
+function detectLineOrientation(d: string): 'horizontal' | 'vertical' | 'diagonal' {
+  const tokens = d.match(/[A-Za-z]|[-+]?(?:\d+\.?\d*|\.\d+)(?:[eE][-+]?\d+)?/g);
+  if (!tokens) return 'diagonal';
+  const xs: number[] = [];
+  const ys: number[] = [];
+  let cmd = '';
+  let argIdx = 0;
+  for (const t of tokens) {
+    if (/^[A-Za-z]$/.test(t)) { cmd = t; argIdx = 0; continue; }
+    const v = parseFloat(t);
+    const upper = cmd.toUpperCase();
+    if (upper === 'M' || upper === 'L' || upper === 'T') {
+      if (argIdx % 2 === 0) xs.push(v); else ys.push(v);
+    } else if (upper === 'H') {
+      xs.push(v);
+    } else if (upper === 'V') {
+      ys.push(v);
+    } else {
+      // 复杂命令直接判为对角线
+      return 'diagonal';
+    }
+    argIdx++;
+  }
+  if (xs.length < 2 || ys.length < 2) return 'diagonal';
+  const xRange = Math.max(...xs) - Math.min(...xs);
+  const yRange = Math.max(...ys) - Math.min(...ys);
+  const eps = 1e-3;
+  if (yRange < eps && xRange > eps) return 'horizontal';
+  if (xRange < eps && yRange > eps) return 'vertical';
+  return 'diagonal';
+}
+
+/**
  * Scale all coordinate values in an SVG path string by (sx, sy).
  * Handles M, L, C, Q, S, T, A, H, V, Z and their lowercase (relative) variants.
  */
@@ -158,6 +194,27 @@ function bakeGroupTransform(
   return { left: cLeft, top: cTop, rotate: cRot, isFlipH: cFlipH, isFlipV: cFlipV };
 }
 
+/**
+ * 计算 group 缩放该 child 时实际使用的 (sw, sh)。
+ *
+ * 普通元素直接用 group 的 (ws, hs)。但对于 line / straightConnector1 这类
+ * 单段线段：源 XML 常以 cy=0 或 cx=0 表示水平/垂直线，shapeSerializer 为了
+ * SVG viewBox 可见会把对应轴 bump 到 1px(=0.75pt)。若再被 group 整体缩放，
+ * 这条 1px 厚度就会被放大成几百 pt，导致下游渲染器（按 bbox 对角线绘制 line）
+ * 把横线画成对角斜线。这里只缩放线段的方向轴，垂直轴保留原 stroke 厚度。
+ */
+function sizeScaleForChild(c: ChildEl, ws: number, hs: number): { sw: number; sh: number } {
+  if (!isShape(c as unknown as Element)) return { sw: ws, sh: hs };
+  const shapType = (c as any).shapType;
+  if (shapType !== 'line' && shapType !== 'straightConnector1') return { sw: ws, sh: hs };
+  const path: string | undefined = (c as any).path;
+  if (!path) return { sw: ws, sh: hs };
+  const orient = detectLineOrientation(path);
+  if (orient === 'horizontal') return { sw: ws, sh: 1 };
+  if (orient === 'vertical') return { sw: 1, sh: hs };
+  return { sw: ws, sh: hs };
+}
+
 /** 把 baked transform 的 rotate/flip 字段写到 scaled 对象上（仅当 child 本身有该字段）。 */
 function assignBakedRotFlip(scaled: any, child: ChildEl, baked: BakedTransform): void {
   if ('rotate' in child) scaled.rotate = toFixed(baked.rotate);
@@ -216,30 +273,32 @@ export async function groupToElement(
           );
           const localLeft = baked ? baked.left : c.left;
           const localTop = baked ? baked.top : c.top;
+          const sxsy = sizeScaleForChild(c, ws, hs);
           const scaled: any = {
             ...c,
             left: toFixed(gLeft + localLeft * ws),
             top: toFixed(gTop + localTop * hs),
-            width: toFixed(c.width * ws),
-            height: toFixed(c.height * hs),
+            width: toFixed(c.width * sxsy.sw),
+            height: toFixed(c.height * sxsy.sh),
           };
           if (baked) assignBakedRotFlip(scaled, c, baked);
           if (isShape(c) && (c as any).path) {
-            scaled.path = scaleSvgPath((c as any).path, ws, hs);
+            scaled.path = scaleSvgPath((c as any).path, sxsy.sw, sxsy.sh);
           }
           elements.push(scaled as BaseElement);
         }
       } else {
         const be = el as BaseElement & { left: number; top: number; width: number; height: number };
+        const sxsy = sizeScaleForChild(be as ChildEl, ws, hs);
         const scaled: any = {
           ...be,
           left: toFixed((be.left - chOffX) * ws),
           top: toFixed((be.top - chOffY) * hs),
-          width: toFixed(be.width * ws),
-          height: toFixed(be.height * hs),
+          width: toFixed(be.width * sxsy.sw),
+          height: toFixed(be.height * sxsy.sh),
         };
         if (isShape(el) && (el as any).path) {
-          scaled.path = scaleSvgPath((el as any).path, ws, hs);
+          scaled.path = scaleSvgPath((el as any).path, sxsy.sw, sxsy.sh);
         }
         elements.push(scaled as BaseElement);
       }
