@@ -506,8 +506,15 @@ export async function renderShape(node: ShapeNodeData, ctx: RenderContext, _orde
   const height = pxToPt(minH);
 
   // Path coordinates must be in pt to match the JSON width/height (PPTist viewBox).
-  const pathW = width;
-  const pathH = height;
+  // 对线段类 preset，若原始 size 在某轴上为 0（或接近 0、远小于另一轴），
+  // 给 preset 传 0 以保留水平/垂直方向语义，否则 bump 后的非零 h/w 会让
+  // line preset 误走对角线分支（在被 group 大幅缩放时表现为 V 字折线）。
+  let pathW = width;
+  let pathH = height;
+  if (isLineLike) {
+    if (node.size.h === 0 || (node.size.w >= 1 && node.size.h < 1)) pathH = 0;
+    else if (node.size.w === 0 || (node.size.h >= 1 && node.size.w < 1)) pathW = 0;
+  }
 
   const styleNode = node.source.child('style');
   const lnRef = styleNode.exists() ? styleNode.child('lnRef') : undefined;
