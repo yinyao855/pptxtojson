@@ -103,6 +103,68 @@ export type NodeToElement = (
   files?: PptxFiles,
 ) => Promise<Element>;
 
+type ChildEl = BaseElement & {
+  left: number; top: number; width: number; height: number;
+  rotate?: number; isFlipH?: boolean; isFlipV?: boolean;
+};
+
+type BakedTransform = {
+  left: number; top: number; rotate: number; isFlipH: boolean; isFlipV: boolean;
+};
+
+/**
+ * 在 group 局部坐标系内，把 group 的 flip/rotation 烘焙到子元素的 transform，
+ * 让输出不再依赖 group 包裹层的变换。无变换时返回 null。
+ *
+ * flipH+flipV 同时出现等价于绕中心旋转 180°，这里直接折算为 +180° 旋转而不是
+ * 给子元素加 isFlipH+isFlipV，避免渲染器把 text 字形也镜像（PowerPoint/WPS
+ * 对 text 的 flip 不影响字形朝向）。
+ */
+function bakeGroupTransform(
+  child: ChildEl,
+  gW: number, gH: number,
+  gFlipH: boolean, gFlipV: boolean, gRot: number,
+): BakedTransform | null {
+  if (!gFlipH && !gFlipV && gRot === 0) return null;
+  let cLeft = child.left;
+  let cTop = child.top;
+  const cW = child.width;
+  const cH = child.height;
+  let cRot = child.rotate ?? 0;
+  let cFlipH = child.isFlipH ?? false;
+  let cFlipV = child.isFlipV ?? false;
+  if (gFlipH && gFlipV) {
+    cLeft = gW - cLeft - cW;
+    cTop = gH - cTop - cH;
+    cRot += 180;
+  } else if (gFlipH) {
+    cLeft = gW - cLeft - cW;
+    cRot = -cRot;
+    cFlipH = !cFlipH;
+  } else if (gFlipV) {
+    cTop = gH - cTop - cH;
+    cRot = -cRot;
+    cFlipV = !cFlipV;
+  }
+  if (gRot !== 0) {
+    const dx = cLeft + cW / 2 - gW / 2;
+    const dy = cTop + cH / 2 - gH / 2;
+    const θ = (gRot * Math.PI) / 180;
+    cLeft = dx * Math.cos(θ) - dy * Math.sin(θ) + gW / 2 - cW / 2;
+    cTop = dx * Math.sin(θ) + dy * Math.cos(θ) + gH / 2 - cH / 2;
+    cRot += gRot;
+  }
+  cRot = ((cRot % 360) + 360) % 360;
+  return { left: cLeft, top: cTop, rotate: cRot, isFlipH: cFlipH, isFlipV: cFlipV };
+}
+
+/** 把 baked transform 的 rotate/flip 字段写到 scaled 对象上（仅当 child 本身有该字段）。 */
+function assignBakedRotFlip(scaled: any, child: ChildEl, baked: BakedTransform): void {
+  if ('rotate' in child) scaled.rotate = toFixed(baked.rotate);
+  if ('isFlipH' in child) scaled.isFlipH = baked.isFlipH;
+  if ('isFlipV' in child) scaled.isFlipV = baked.isFlipV;
+}
+
 export async function groupToElement(
   node: GroupNodeData,
   ctx: RenderContext,
@@ -141,18 +203,28 @@ export async function groupToElement(
     if (childNode) {
       const el = await nodeToElement(childNode, childCtx, idx, files);
       if (isGroup(el)) {
-        const gLeft = toFixed((el.left - chOffX) * ws);
-        const gTop = toFixed((el.top - chOffY) * hs);
-        for (const child of el.elements) {
-          const c = child as BaseElement & { left: number; top: number; width: number; height: number };
+        const innerGroup = el;
+        const gLeft = toFixed((innerGroup.left - chOffX) * ws);
+        const gTop = toFixed((innerGroup.top - chOffY) * hs);
+        for (const child of innerGroup.elements) {
+          const c = child as ChildEl;
+          // 先把内层 group 的 flip/rotation 烘焙到子元素的局部坐标系，再按外层
+          // group 的 ws/hs 缩放并平移。
+          const baked = bakeGroupTransform(
+            c, innerGroup.width, innerGroup.height,
+            !!innerGroup.isFlipH, !!innerGroup.isFlipV, innerGroup.rotate || 0,
+          );
+          const localLeft = baked ? baked.left : c.left;
+          const localTop = baked ? baked.top : c.top;
           const scaled: any = {
             ...c,
-            left: toFixed(gLeft + c.left * ws),
-            top: toFixed(gTop + c.top * hs),
+            left: toFixed(gLeft + localLeft * ws),
+            top: toFixed(gTop + localTop * hs),
             width: toFixed(c.width * ws),
             height: toFixed(c.height * hs),
           };
-          if (isShape(c as Element) && (c as any).path) {
+          if (baked) assignBakedRotFlip(scaled, c, baked);
+          if (isShape(c) && (c as any).path) {
             scaled.path = scaleSvgPath((c as any).path, ws, hs);
           }
           elements.push(scaled as BaseElement);
@@ -175,16 +247,29 @@ export async function groupToElement(
     }
   }
 
+  // 把当前 group 自身的 flip/rotation 烘焙到子元素，让输出的 group 始终是
+  // 中性的（无 flip、无 rotation），下游渲染器无需再组合 group 级变换。
+  for (const el2 of elements) {
+    const c = el2 as ChildEl;
+    const baked = bakeGroupTransform(
+      c, width, height, !!node.flipH, !!node.flipV, node.rotation || 0,
+    );
+    if (!baked) continue;
+    c.left = toFixed(baked.left);
+    c.top = toFixed(baked.top);
+    assignBakedRotFlip(c, c, baked);
+  }
+
   return {
     type: 'group',
     left,
     top,
     width,
     height,
-    rotate: node.rotation,
+    rotate: 0,
     elements,
     order,
-    isFlipH: node.flipH,
-    isFlipV: node.flipV,
+    isFlipH: false,
+    isFlipV: false,
   };
 }
