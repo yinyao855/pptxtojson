@@ -11,6 +11,7 @@ import type { RenderContext } from './RenderContext';
 import type { Math as MathElement } from '../adapter/types';
 import { resolveMediaToUrl } from '../utils/mediaWebConvert';
 import { resolveMediaPath } from '../utils/media';
+import { DOMParser } from '@xmldom/xmldom';
 
 // @ts-expect-error — omml2mathml has no type declarations
 import omml2mathml from 'omml2mathml';

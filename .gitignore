@@ -20,11 +20,9 @@ pnpm-debug.log*
 *.sln
 *.sw?
 
-extracted-pptx
 pptx-renderer-main
 *.pptx
 .pnpm-store
 dist
 docs
-output
 out
