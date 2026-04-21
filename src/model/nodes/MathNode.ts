@@ -18,6 +18,8 @@ export interface MathNodeData extends BaseNodeData {
   fallbackBlipEmbed?: string;
   /** Plain text extracted from m:t elements inside the OMML. */
   plainText: string;
+  /** rId of embedded .docx package (Word.Document OLE — contains EQ field math). */
+  oleDocxRId?: string;
 }
 
 /**
@@ -66,6 +68,50 @@ export function isMathAlternateContent(altContent: SafeXmlNode): boolean {
   const txBody = sp.child('txBody');
   if (!txBody.exists()) return false;
   return findOmmlNode(txBody) !== null;
+}
+
+/**
+ * Parse a graphicFrame whose oleObj has progId starting with "Word.Document".
+ * These OLE objects contain embedded .docx with EQ field math (legacy Word formula).
+ * The actual docx parsing is deferred to the serializer (needs zip decompression);
+ * here we just capture the rIds.
+ */
+export function parseOleDocxMathNode(
+  graphicFrame: SafeXmlNode,
+): MathNodeData | undefined {
+  const base = parseBaseProps(graphicFrame);
+
+  const graphicData = graphicFrame.child('graphic').child('graphicData');
+  const altContent = graphicData.child('AlternateContent');
+  if (!altContent.exists()) return undefined;
+
+  // mc:Choice > p:oleObj has the docx rId
+  const oleObj = altContent.child('Choice').child('oleObj');
+  const docxRId = oleObj.attr('r:id') ?? oleObj.attr('id');
+  if (!docxRId) return undefined;
+
+  // mc:Fallback > p:oleObj > p:pic > p:blipFill > a:blip has the EMF fallback
+  let fallbackBlipEmbed: string | undefined;
+  const fallback = altContent.child('Fallback');
+  if (fallback.exists()) {
+    const fbOle = fallback.child('oleObj');
+    const fbPic = fbOle.exists() ? fbOle.child('pic') : fallback.child('pic');
+    if (fbPic.exists()) {
+      const blip = fbPic.child('blipFill').child('blip');
+      if (blip.exists()) {
+        fallbackBlipEmbed = blip.attr('embed') ?? blip.attr('r:embed');
+      }
+    }
+  }
+
+  return {
+    ...base,
+    nodeType: 'math' as const,
+    ommlXml: '',
+    oleDocxRId: docxRId,
+    fallbackBlipEmbed,
+    plainText: '',
+  };
 }
 
 /**

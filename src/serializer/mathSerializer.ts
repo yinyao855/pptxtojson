@@ -12,6 +12,8 @@ import type { Math as MathElement } from '../adapter/types';
 import { resolveMediaToUrl } from '../utils/mediaWebConvert';
 import { resolveMediaPath } from '../utils/media';
 import { DOMParser } from '@xmldom/xmldom';
+import { parseDocxMathContent } from '../utils/eqFieldParser';
+import JSZip from 'jszip';
 
 // @ts-expect-error — omml2mathml has no type declarations
 import omml2mathml from 'omml2mathml';
@@ -223,6 +225,31 @@ async function resolveFallbackImage(
 }
 
 /**
+ * Resolve an embedded .docx package from the slide's rels + presentation embeddings.
+ * Returns the word/document.xml content string, or null.
+ */
+async function resolveOleDocxContent(
+  rId: string,
+  ctx: RenderContext,
+): Promise<string | null> {
+  const rel = ctx.slide.rels.get(rId);
+  if (!rel) return null;
+
+  const fileName = rel.target.split('/').pop() || '';
+  const embeddingPath = `ppt/embeddings/${fileName}`;
+  const data = ctx.presentation.embeddings.get(embeddingPath);
+  if (!data) return null;
+
+  try {
+    const zip = await JSZip.loadAsync(data);
+    const docXml = await zip.file('word/document.xml')?.async('string');
+    return docXml ?? null;
+  } catch {
+    return null;
+  }
+}
+
+/**
  * Serialize a math node to a Math element.
  */
 export async function mathToElement(
@@ -236,7 +263,21 @@ export async function mathToElement(
   const width = pxToPt(node.size.w);
   const height = pxToPt(node.size.h);
 
-  const latex = ommlToLatex(node.ommlXml);
+  let latex = '';
+  let plainText = node.plainText || '';
+
+  if (node.oleDocxRId) {
+    // OLE Word.Document with EQ field math
+    const docXml = await resolveOleDocxContent(node.oleDocxRId, ctx);
+    if (docXml) {
+      const content = parseDocxMathContent(docXml);
+      latex = content.latex;
+      plainText = content.plainText || plainText;
+    }
+  } else if (node.ommlXml) {
+    latex = ommlToLatex(node.ommlXml);
+  }
+
   const picBase64 = await resolveFallbackImage(node.fallbackBlipEmbed, ctx);
 
   return {
@@ -248,6 +289,6 @@ export async function mathToElement(
     latex,
     picBase64,
     order,
-    text: node.plainText || undefined,
+    text: plainText || undefined,
   };
 }

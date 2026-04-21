@@ -24,6 +24,7 @@ export interface PptxFiles {
   chartColors: Map<string, string>; // ppt/charts/colors*.xml
   diagramDrawings: Map<string, string>; // ppt/diagrams/drawing*.xml (SmartArt fallback)
   notesSlides: Map<string, string>; // ppt/notesSlides/notesSlide*.xml
+  embeddings: Map<string, Uint8Array>; // ppt/embeddings/*.docx etc.
 }
 
 export interface ZipParseLimits {
@@ -142,6 +143,7 @@ export async function parseZip(
     chartColors: new Map(),
     diagramDrawings: new Map(),
     notesSlides: new Map(),
+    embeddings: new Map(),
   };
 
   let unknownMediaBytes = 0;
@@ -269,6 +271,12 @@ export async function parseZip(
     // --- Diagram Drawings (SmartArt fallback) ---
     if (/^ppt\/diagrams\/drawing\d+\.xml$/.test(normalizedPath)) {
       result.diagramDrawings.set(normalizedPath, await file.async('string'));
+      return;
+    }
+
+    // --- Embeddings (OLE objects: .docx, .xlsx, etc.) ---
+    if (normalizedPath.startsWith('ppt/embeddings/')) {
+      result.embeddings.set(normalizedPath, await file.async('uint8array'));
       return;
     }
   });

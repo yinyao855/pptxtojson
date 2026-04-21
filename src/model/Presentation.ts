@@ -24,6 +24,7 @@ export interface PresentationData {
   layoutToMaster: Map<string, string>;
   masterToTheme: Map<string, string>;
   media: Map<string, Uint8Array>;
+  embeddings: Map<string, Uint8Array>;
   tableStyles?: SafeXmlNode;
   charts: Map<string, SafeXmlNode>;
   isWps: boolean;
@@ -273,6 +274,7 @@ export function buildPresentation(files: PptxFiles): PresentationData {
     layoutToMaster,
     masterToTheme,
     media: files.media,
+    embeddings: files.embeddings,
     tableStyles,
     charts,
     isWps,

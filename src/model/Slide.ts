@@ -12,7 +12,7 @@ import { PicNodeData, parsePicNode } from './nodes/PicNode';
 import { TableNodeData, parseTableNode } from './nodes/TableNode';
 import { GroupNodeData, parseGroupNode } from './nodes/GroupNode';
 import { ChartNodeData, parseChartNode } from './nodes/ChartNode';
-import { MathNodeData, parseMathNode, isMathAlternateContent } from './nodes/MathNode';
+import { MathNodeData, parseMathNode, parseOleDocxMathNode, isMathAlternateContent } from './nodes/MathNode';
 
 export type SlideNode = ShapeNodeData | PicNodeData | TableNodeData | GroupNodeData | ChartNodeData | MathNodeData;
 
@@ -45,6 +45,27 @@ function isChartFrame(node: SafeXmlNode): boolean {
   const graphicData = graphic.child('graphicData');
   const uri = graphicData.attr('uri') || '';
   return uri.includes('chart');
+}
+
+/**
+ * Detect graphicFrame with oleObj progId="Word.Document.*" and delegate to
+ * parseOleDocxMathNode. These are embedded .docx containing EQ field math.
+ */
+function tryParseOleDocxMath(graphicFrame: SafeXmlNode): MathNodeData | undefined {
+  const graphicData = graphicFrame.child('graphic').child('graphicData');
+  const uri = graphicData.attr('uri') || '';
+  if (!uri.includes('ole')) return undefined;
+
+  const altContent = graphicData.child('AlternateContent');
+  if (!altContent.exists()) return undefined;
+
+  const oleObj = altContent.child('Choice').child('oleObj');
+  if (!oleObj.exists()) return undefined;
+
+  const progId = oleObj.attr('progId') || '';
+  if (!progId.startsWith('Word.Document')) return undefined;
+
+  return parseOleDocxMathNode(graphicFrame);
 }
 
 /**
@@ -310,6 +331,11 @@ export function parseChildNode(
       // SmartArt diagram with drawing fallback
       if (isDiagramFrame(child) && diagramDrawings) {
         return parseDiagramFrame(child, rels, slidePath, diagramDrawings);
+      }
+      // Word.Document OLE → math node (EQ field formulas in embedded .docx)
+      {
+        const oleDocxMath = tryParseOleDocxMath(child);
+        if (oleDocxMath) return oleDocxMath;
       }
       // OLE object with fallback picture (e.g. embedded PDF preview on slide 34)
       {
