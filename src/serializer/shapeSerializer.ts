@@ -549,8 +549,11 @@ export async function renderShape(node: ShapeNodeData, ctx: RenderContext, _orde
   // 仅 bump 与线段方向"垂直"的那一轴，保证 SVG viewBox 非退化、stroke 可见；
   // 沿线段方向的轴不 bump，避免在 group 内被 ws/hs 放大后 bbox 异常巨大
   // （下游按 bbox 对角线渲染 line 的渲染器会把横线画成对角斜线）。
-  const minH = isLineLike && node.size.h < 1 && lineOrient !== 'v' ? 1 : node.size.h;
-  const minW = isLineLike && node.size.w < 1 && lineOrient !== 'h' ? 1 : node.size.w;
+  // 当两轴都 < 1 时（对角连接符在极小子坐标系中），不做 bump——
+  // group 缩放会将其放大到正确尺寸；bump 反而会被放大几百倍。
+  const bothSubPixel = node.size.w < 1 && node.size.h < 1;
+  const minH = isLineLike && node.size.h < 1 && !bothSubPixel && lineOrient !== 'v' ? 1 : node.size.h;
+  const minW = isLineLike && node.size.w < 1 && !bothSubPixel && lineOrient !== 'h' ? 1 : node.size.w;
   const width = pxToPt(minW);
   const height = pxToPt(minH);
 
