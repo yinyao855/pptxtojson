@@ -26,7 +26,7 @@ import { resolveRelTarget } from '../parser/RelParser';
 import { resolveMediaToUrl } from '../utils/mediaWebConvert';
 import { isAllowedExternalUrl } from '../utils/urlSafety';
 import { lineStyleToBorder, type BorderResult } from './borderMapper';
-import type { AutoFit, Fill, GradientFill, ImageFill, Shadow, Shape, Text } from '../adapter/types';
+import type { AutoFit, Fill, GradientFill, ImageFill, LineEnd, Shadow, Shape, Text } from '../adapter/types';
 
 // ---------------------------------------------------------------------------
 // Units (shape positions/sizes are in px in node; JSON uses pt)
@@ -81,7 +81,45 @@ async function resolveShapeBlipFill(
 }
 
 // ---------------------------------------------------------------------------
-// Line End Marker (Arrowhead) Helpers — same as ShapeRenderer (JSON does not emit SVG markers)
+// Gradient stop color picker
+// ---------------------------------------------------------------------------
+
+/**
+ * Pick the best visible color from gradient stops.
+ * Skips fully transparent and white colors; falls back to last stop or black.
+ */
+function pickVisibleGradientStop(stops: Array<{ position: number; color: string }>): string {
+  for (const s of stops) {
+    const c = s.color.toLowerCase();
+    if (c === 'transparent' || c === 'rgba(0,0,0,0)' || c === 'rgba(0, 0, 0, 0)') continue;
+    // Skip colors with 0 alpha (e.g. #rrggbbaa where aa = '00', rgba(...,0))
+    const rgbaMatch = c.match(/rgba?\(\s*(\d+)\s*,\s*(\d+)\s*,\s*(\d+)\s*(?:,\s*([\d.]+))?\s*\)/);
+    if (rgbaMatch) {
+      const a = rgbaMatch[4] !== undefined ? parseFloat(rgbaMatch[4]) : 1;
+      if (a < 0.3) continue;
+      const r = parseInt(rgbaMatch[1]), g = parseInt(rgbaMatch[2]), b = parseInt(rgbaMatch[3]);
+      if (r > 250 && g > 250 && b > 250) continue;
+      return c;
+    }
+    // Hex: #rgb, #rrggbb, #rrggbbaa
+    if (c.startsWith('#')) {
+      if (c.length === 9) {
+        const aa = parseInt(c.slice(7, 9), 16);
+        if (aa < 77) continue; // ~30% alpha
+      }
+      const hex = c.length === 4
+        ? c[1] + c[1] + c[2] + c[2] + c[3] + c[3]
+        : c.slice(1, 7);
+      if (hex === 'ffffff' || hex === 'fff') continue;
+      return c;
+    }
+    return c;
+  }
+  return stops[stops.length - 1]?.color || '#000000';
+}
+
+// ---------------------------------------------------------------------------
+// Line End Marker (Arrowhead) Helpers
 // ---------------------------------------------------------------------------
 
 /** True if the text body has at least one non-empty run (avoids covering shapes with empty placeholder text). */
@@ -705,10 +743,10 @@ export async function renderShape(node: ShapeNodeData, ctx: RenderContext, _orde
     gradientStroke &&
     gradientStroke.stops.length > 0
   ) {
-    const c0 = gradientStroke.stops[0]?.color || '#000000';
+    const bestStop = pickVisibleGradientStop(gradientStroke.stops);
     borderResult = {
       border: {
-        borderColor: cssColorToFillHex(c0),
+        borderColor: cssColorToFillHex(bestStop),
         borderWidth: pxToPt(Math.max(gradientStroke.width, 1)),
         borderType: 'solid',
       },
@@ -850,13 +888,27 @@ export async function renderShape(node: ShapeNodeData, ctx: RenderContext, _orde
     return textEl;
   }
 
+  const cleanLineEnd = (end?: LineEnd): LineEnd | undefined => {
+    if (!end) return undefined;
+    return {
+      type: end.type,
+      ...(end.w && { w: end.w }),
+      ...(end.len && { len: end.len }),
+    };
+  };
+
+  const headEnd = cleanLineEnd(effectiveHeadEnd);
+  const tailEnd = cleanLineEnd(effectiveTailEnd);
+
   const shapeEl: Shape = {
     ...baseCommon,
     type: 'shape',
     shapType,
     vAlign,
     path: pathOut,
-    ...(keypoints ? { keypoints } : {}),
+    ...(keypoints && { keypoints }),
+    ...(headEnd && { headEnd }),
+    ...(tailEnd && { tailEnd }),
   };
   return shapeEl;
 }
