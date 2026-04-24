@@ -419,12 +419,14 @@ function buildImage(
 ): Image {
   const spPr = node.source.child('spPr');
   const ln = spPr.exists() ? spPr.child('ln') : node.source.child('__none__');
-  const borderResult = ln.exists()
-    ? lineStyleToBorder(ln, ctx)
-    : {
-        border: { borderColor: '#000000', borderWidth: 0, borderType: 'solid' as const },
-        borderStrokeDasharray: '0',
-      };
+  const noBorder = { border: { borderColor: '#000000', borderWidth: 0, borderType: 'solid' as const }, borderStrokeDasharray: '0' };
+  let borderResult: ReturnType<typeof lineStyleToBorder>;
+  if (ln.exists()) {
+    const hasFill = ln.child('solidFill').exists() || ln.child('gradFill').exists() || ln.child('pattFill').exists();
+    borderResult = hasFill ? lineStyleToBorder(ln, ctx) : noBorder;
+  } else {
+    borderResult = noBorder;
+  }
 
   let rect: Image['rect'] | undefined;
   if (
