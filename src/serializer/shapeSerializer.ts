@@ -26,7 +26,7 @@ import { resolveRelTarget } from '../parser/RelParser';
 import { resolveMediaToUrl } from '../utils/mediaWebConvert';
 import { isAllowedExternalUrl } from '../utils/urlSafety';
 import { lineStyleToBorder, type BorderResult } from './borderMapper';
-import type { AutoFit, Fill, GradientFill, ImageFill, LineEnd, Shadow, Shape, Text } from '../adapter/types';
+import type { AutoFit, Fill, GradientFill, ImageFill, Shadow, Shape, Text } from '../adapter/types';
 
 // ---------------------------------------------------------------------------
 // Units (shape positions/sizes are in px in node; JSON uses pt)
@@ -119,8 +119,193 @@ function pickVisibleGradientStop(stops: Array<{ position: number; color: string 
 }
 
 // ---------------------------------------------------------------------------
-// Line End Marker (Arrowhead) Helpers
+// Line End Marker (Arrowhead) → SVG path helpers
 // ---------------------------------------------------------------------------
+
+interface Vec2 { x: number; y: number }
+
+/** Size multiplier: sm=0.5, med=1, lg=1.5 */
+function sizeMultiplier(s?: string): number {
+  if (s === 'sm') return 0.5;
+  if (s === 'lg') return 1.5;
+  return 1;
+}
+
+/**
+ * Build a filled-triangle arrowhead path at `tip` pointing in `dir`.
+ * Returns SVG sub-path string (M...L...L...Z).
+ */
+function triangleArrowPath(tip: Vec2, dir: Vec2, strokeW: number, w?: string, len?: string): string {
+  const baseW = strokeW * 3;
+  const halfW = (baseW * sizeMultiplier(w)) / 2;
+  const length = baseW * sizeMultiplier(len);
+  const mag = Math.sqrt(dir.x * dir.x + dir.y * dir.y);
+  if (mag < 1e-9) return '';
+  const ux = dir.x / mag, uy = dir.y / mag;
+  const px = -uy, py = ux;
+  const base = { x: tip.x - ux * length, y: tip.y - uy * length };
+  const p1 = { x: base.x + px * halfW, y: base.y + py * halfW };
+  const p2 = { x: base.x - px * halfW, y: base.y - py * halfW };
+  return `M${tip.x},${tip.y}L${p1.x},${p1.y}L${p2.x},${p2.y}Z`;
+}
+
+/**
+ * Build an open-arrow (two lines, no fill) path at `tip`.
+ */
+function openArrowPath(tip: Vec2, dir: Vec2, strokeW: number, w?: string, len?: string): string {
+  const baseW = strokeW * 3;
+  const halfW = (baseW * sizeMultiplier(w)) / 2;
+  const length = baseW * sizeMultiplier(len);
+  const mag = Math.sqrt(dir.x * dir.x + dir.y * dir.y);
+  if (mag < 1e-9) return '';
+  const ux = dir.x / mag, uy = dir.y / mag;
+  const px = -uy, py = ux;
+  const base = { x: tip.x - ux * length, y: tip.y - uy * length };
+  const p1 = { x: base.x + px * halfW, y: base.y + py * halfW };
+  const p2 = { x: base.x - px * halfW, y: base.y - py * halfW };
+  return `M${p1.x},${p1.y}L${tip.x},${tip.y}L${p2.x},${p2.y}`;
+}
+
+/**
+ * Build a diamond arrowhead at `tip`.
+ */
+function diamondArrowPath(tip: Vec2, dir: Vec2, strokeW: number, w?: string, len?: string): string {
+  const baseW = strokeW * 3;
+  const halfW = (baseW * sizeMultiplier(w)) / 2;
+  const length = baseW * sizeMultiplier(len);
+  const mag = Math.sqrt(dir.x * dir.x + dir.y * dir.y);
+  if (mag < 1e-9) return '';
+  const ux = dir.x / mag, uy = dir.y / mag;
+  const px = -uy, py = ux;
+  const mid = { x: tip.x - ux * (length / 2), y: tip.y - uy * (length / 2) };
+  const back = { x: tip.x - ux * length, y: tip.y - uy * length };
+  return `M${tip.x},${tip.y}L${mid.x + px * halfW},${mid.y + py * halfW}L${back.x},${back.y}L${mid.x - px * halfW},${mid.y - py * halfW}Z`;
+}
+
+/**
+ * Build an oval arrowhead at `tip`.
+ */
+function ovalArrowPath(tip: Vec2, dir: Vec2, strokeW: number, w?: string, len?: string): string {
+  const baseW = strokeW * 3;
+  const rw = (baseW * sizeMultiplier(w)) / 2;
+  const rl = (baseW * sizeMultiplier(len)) / 2;
+  const mag = Math.sqrt(dir.x * dir.x + dir.y * dir.y);
+  if (mag < 1e-9) return '';
+  const ux = dir.x / mag, uy = dir.y / mag;
+  const cx = tip.x - ux * rl, cy = tip.y - uy * rl;
+  return `M${cx + rw},${cy}A${rw},${rl} 0 1,1 ${cx - rw},${cy}A${rw},${rl} 0 1,1 ${cx + rw},${cy}Z`;
+}
+
+function buildArrowPath(
+  type: string, tip: Vec2, dir: Vec2, strokeW: number, w?: string, len?: string,
+): string {
+  switch (type) {
+    case 'triangle': return triangleArrowPath(tip, dir, strokeW, w, len);
+    case 'arrow': return openArrowPath(tip, dir, strokeW, w, len);
+    case 'stealth': return triangleArrowPath(tip, dir, strokeW, w, len);
+    case 'diamond': return diamondArrowPath(tip, dir, strokeW, w, len);
+    case 'oval': return ovalArrowPath(tip, dir, strokeW, w, len);
+    default: return triangleArrowPath(tip, dir, strokeW, w, len);
+  }
+}
+
+/**
+ * Parse a simple SVG path to extract its start and end points + directions.
+ * Handles M...L (lines) and M...A (arcs).
+ */
+function extractPathEndpoints(d: string): {
+  start: Vec2; end: Vec2;
+  startDir: Vec2;
+  endDir: Vec2;
+} | null {
+  const nums = d.match(/[-+]?(?:\d+\.?\d*|\.\d+)(?:[eE][-+]?\d+)?/g);
+  if (!nums || nums.length < 4) return null;
+
+  const cmds = d.match(/[MLAQCSTHVZ]/gi) || [];
+  const allNums = nums.map(Number);
+
+  const startX = allNums[0], startY = allNums[1];
+
+  if (/A/i.test(d)) {
+    // Arc: M sx,sy A rx,ry rotation largeArc sweep ex,ey
+    const aIdx = d.search(/A/i);
+    const afterA = d.slice(aIdx + 1);
+    const aNums = afterA.match(/[-+]?(?:\d+\.?\d*|\.\d+)(?:[eE][-+]?\d+)?/g);
+    if (!aNums || aNums.length < 7) return null;
+    const rx = Number(aNums[0]), ry = Number(aNums[1]);
+    const sweep = Number(aNums[4]);
+    const ex = Number(aNums[5]), ey = Number(aNums[6]);
+    // For circle (rx≈ry), tangent ⊥ radius.  For ellipse, approximate.
+    const cx = (startX + ex) / 2, cy = (startY + ey) / 2;
+    // Better: compute actual center from arc parameters
+    const arcCenter = computeArcCenter(startX, startY, ex, ey, rx, ry, 0, Number(aNums[3]), sweep);
+    const acx = arcCenter?.cx ?? cx, acy = arcCenter?.cy ?? cy;
+
+    // startDir points BACKWARD (opposite travel) — consistent with line convention.
+    // endDir points FORWARD (travel direction).
+    const rsx = startX - acx, rsy = startY - acy;
+    const startDir = sweep ? { x: rsy, y: -rsx } : { x: -rsy, y: rsx };
+    const rex = ex - acx, rey = ey - acy;
+    const endDir = sweep ? { x: -rey, y: rex } : { x: rey, y: -rex };
+
+    return { start: { x: startX, y: startY }, end: { x: ex, y: ey }, startDir, endDir };
+  }
+
+  // Simple line: M sx,sy L ex,ey (possibly with more L points)
+  const ex = allNums[allNums.length - 2], ey = allNums[allNums.length - 1];
+  const dir = { x: ex - startX, y: ey - startY };
+  return {
+    start: { x: startX, y: startY }, end: { x: ex, y: ey },
+    startDir: { x: -dir.x, y: -dir.y },
+    endDir: dir,
+  };
+}
+
+/**
+ * Compute the center of an SVG arc given endpoints and radii.
+ * Simplified: works well for circular arcs and reasonable ellipses.
+ */
+function computeArcCenter(
+  x1: number, y1: number, x2: number, y2: number,
+  rx: number, ry: number, _rotation: number, largeArc: number, sweep: number,
+): { cx: number; cy: number } | null {
+  // Normalize to unit circle space
+  const dx = (x1 - x2) / 2, dy = (y1 - y2) / 2;
+  const mx = (x1 + x2) / 2, my = (y1 + y2) / 2;
+  const dxn = dx / rx, dyn = dy / ry;
+  const dsq = dxn * dxn + dyn * dyn;
+  if (dsq >= 1) return null;
+  const s = Math.sqrt(Math.max(0, (1 - dsq) / dsq));
+  const sign = (largeArc === sweep) ? -1 : 1;
+  const cxn = sign * s * (dy / ry);
+  const cyn = -sign * s * (dx / rx);
+  return { cx: mx + cxn * rx, cy: my + cyn * ry };
+}
+
+/**
+ * Append arrowhead geometry to an existing SVG path string.
+ * Mutates nothing; returns the new path with arrow sub-paths appended.
+ */
+function appendArrowsToPath(
+  pathD: string,
+  headEnd: LineEndInfo | undefined,
+  tailEnd: LineEndInfo | undefined,
+  strokeWidthPx: number,
+): string {
+  if (!pathD || (!headEnd && !tailEnd)) return pathD;
+  const ep = extractPathEndpoints(pathD);
+  if (!ep) return pathD;
+  const parts = [pathD];
+  if (headEnd) {
+    const arrow = buildArrowPath(headEnd.type, ep.start, ep.startDir, strokeWidthPx, headEnd.w ?? undefined, headEnd.len ?? undefined);
+    if (arrow) parts.push(' ' + arrow);
+  }
+  if (tailEnd) {
+    const arrow = buildArrowPath(tailEnd.type, ep.end, ep.endDir, strokeWidthPx, tailEnd.w ?? undefined, tailEnd.len ?? undefined);
+    if (arrow) parts.push(' ' + arrow);
+  }
+  return parts.join('');
+}
 
 /** True if the text body has at least one non-empty run (avoids covering shapes with empty placeholder text). */
 function hasVisibleText(textBody: TextBody): boolean {
@@ -805,7 +990,12 @@ export async function renderShape(node: ShapeNodeData, ctx: RenderContext, _orde
       ? 'straightConnector1'
       : node.presetGeometry || (node.customGeometry ? 'custom' : 'rect');
 
-  // Icon overlay in ShapeRenderer is a separate SVG <path>; JSON carries main geometry only (`pathD`).
+  // Integrate arrowhead geometry directly into the SVG path string.
+  if (pathD && (effectiveHeadEnd || effectiveTailEnd)) {
+    const arrowStrokePt = pxToPt(effectiveStrokeWidth) || 1;
+    pathD = appendArrowsToPath(pathD, effectiveHeadEnd, effectiveTailEnd, arrowStrokePt);
+  }
+
   const pathOut: string | undefined = pathD || undefined;
 
   // PPTist expects keypoints normalized by /50000 (OOXML raw value / 50000).
@@ -891,18 +1081,6 @@ export async function renderShape(node: ShapeNodeData, ctx: RenderContext, _orde
     return textEl;
   }
 
-  const cleanLineEnd = (end?: LineEnd): LineEnd | undefined => {
-    if (!end) return undefined;
-    return {
-      type: end.type,
-      ...(end.w && { w: end.w }),
-      ...(end.len && { len: end.len }),
-    };
-  };
-
-  const headEnd = cleanLineEnd(effectiveHeadEnd);
-  const tailEnd = cleanLineEnd(effectiveTailEnd);
-
   const shapeEl: Shape = {
     ...baseCommon,
     type: 'shape',
@@ -910,8 +1088,6 @@ export async function renderShape(node: ShapeNodeData, ctx: RenderContext, _orde
     vAlign,
     path: pathOut,
     ...(keypoints && { keypoints }),
-    ...(headEnd && { headEnd }),
-    ...(tailEnd && { tailEnd }),
   };
   return shapeEl;
 }

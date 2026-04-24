@@ -62,12 +62,6 @@ export interface AutoFit {
   fontScale?: number
 }
 
-export interface LineEnd {
-  type: string
-  w?: string
-  len?: string
-}
-
 export interface Shape {
   type: 'shape'
   left: number
@@ -88,8 +82,6 @@ export interface Shape {
   vAlign: string
   path?: string
   keypoints?: Record<string, number>
-  headEnd?: LineEnd
-  tailEnd?: LineEnd
   name: string
   order: number
   autoFit?: AutoFit
