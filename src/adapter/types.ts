@@ -13,6 +13,7 @@ export interface Shadow {
   v: number
   blur: number
   color: string
+  inset?: boolean
 }
 
 export interface ColorFill {

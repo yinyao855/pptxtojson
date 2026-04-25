@@ -540,27 +540,33 @@ function resolveShapeShadow(node: ShapeNodeData, spPr: SafeXmlNode, ctx: RenderC
   }
 
   if (!effectiveEffectLst.exists()) return undefined;
-  const outerShdw = effectiveEffectLst.child('outerShdw');
-  if (!outerShdw.exists()) return undefined;
 
-  const dir = outerShdw.numAttr('dir') ?? 0;
-  const dist = outerShdw.numAttr('dist') ?? 0;
-  const blurRad = outerShdw.numAttr('blurRad') ?? 0;
+  let shdNode = effectiveEffectLst.child('outerShdw');
+  let isInner = false;
+  if (!shdNode.exists()) {
+    shdNode = effectiveEffectLst.child('innerShdw');
+    if (shdNode.exists()) isInner = true;
+  }
+  if (!shdNode.exists()) return undefined;
+
+  const dir = shdNode.numAttr('dir') ?? 0;
+  const dist = shdNode.numAttr('dist') ?? 0;
+  const blurRad = shdNode.numAttr('blurRad') ?? 0;
   const dirDeg = dir / 60000;
   const distPt = emuToPt(dist);
   const blurPt = emuToPt(blurRad);
-  const h = distPt * Math.cos((dirDeg * Math.PI) / 180);
-  const v = distPt * Math.sin((dirDeg * Math.PI) / 180);
+  const h = isInner ? 0 : distPt * Math.cos((dirDeg * Math.PI) / 180);
+  const v = isInner ? 0 : distPt * Math.sin((dirDeg * Math.PI) / 180);
 
   let color = 'rgba(0,0,0,0.4)';
-  const { color: shdColor, alpha: shdAlpha } = resolveColor(outerShdw, ctx);
+  const { color: shdColor, alpha: shdAlpha } = resolveColor(shdNode, ctx);
   if (shdColor) {
     const hex = shdColor.startsWith('#') ? shdColor : `#${shdColor}`;
     const { r: sr, g: sg, b: sb } = hexToRgb(hex);
     color = `rgba(${sr},${sg},${sb},${shdAlpha.toFixed(3)})`;
   }
 
-  return { h, v, blur: blurPt, color };
+  return { h, v, blur: blurPt, color, ...(isInner ? { inset: true } : {}) } as Shadow;
 }
 
 function resolveShapeLink(node: ShapeNodeData, ctx: RenderContext): string | undefined {
@@ -852,16 +858,19 @@ export async function renderShape(node: ShapeNodeData, ctx: RenderContext, _orde
 
   const lineIsNoFill = node.line && node.line.child('noFill').exists();
   const hasExplicitLine = node.line && !lineIsNoFill;
-  const themeLineFromLnRef =
-    !hasExplicitLine &&
-    !lineIsNoFill &&
+  const lnRefAvailable =
     lnRef?.exists() &&
     (lnRef.numAttr('idx') ?? 0) > 0 &&
-    (ctx.theme.lineStyles?.length ?? 0) >= (lnRef.numAttr('idx') ?? 0)
-      ? ctx.theme.lineStyles![(lnRef.numAttr('idx') ?? 1) - 1]
+    (ctx.theme.lineStyles?.length ?? 0) >= (lnRef.numAttr('idx') ?? 0);
+  // When <a:ln> only declares <a:noFill/> without explicit width/dash and lnRef
+  // is present, WPS falls back to the theme line style (lnRef).
+  const noFillSuppressed = lineIsNoFill && !lnRefAvailable;
+  const themeLineFromLnRef =
+    (!hasExplicitLine) && lnRefAvailable
+      ? ctx.theme.lineStyles![(lnRef!.numAttr('idx') ?? 1) - 1]
       : undefined;
   let effectiveLine = hasExplicitLine ? node.line! : themeLineFromLnRef;
-  if (lineIsNoFill) effectiveLine = undefined;
+  if (noFillSuppressed) effectiveLine = undefined;
 
   if (effectiveLine?.exists()) {
     gradientStroke = resolveGradientStroke(effectiveLine, ctx);
@@ -876,7 +885,7 @@ export async function renderShape(node: ShapeNodeData, ctx: RenderContext, _orde
     // Line cap / join: ShapeRenderer maps a:ln@cap and a:ln/* to SVG stroke-linecap / stroke-linejoin.
     // pptxtojson border fields omit cap/join (see adapter/types Border).
   }
-  if (lineIsNoFill) {
+  if (noFillSuppressed) {
     strokeColor = 'none';
     strokeWidth = 0;
     gradientStroke = null;
@@ -921,7 +930,7 @@ export async function renderShape(node: ShapeNodeData, ctx: RenderContext, _orde
 
   // ---- Border JSON (stroke → pptxtojson border fields) ----
   let borderResult: BorderResult;
-  if (isCircularArrow || lineIsNoFill || !effectiveLine?.exists()) {
+  if (isCircularArrow || noFillSuppressed || !effectiveLine?.exists()) {
     borderResult = {
       border: { borderColor: '#000000', borderWidth: 0, borderType: 'solid' },
       borderStrokeDasharray: '0',
