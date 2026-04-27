@@ -220,12 +220,23 @@ export async function slideToSlide(
   }
 
   // --- Render layout template shapes ---
+  // xmlOrder is computed per-document, so master and layout orders are not
+  // directly comparable. Offset layout orders to guarantee they sort above
+  // all master elements when the renderer sorts layoutElements by order.
   if (slide.showMasterSp) {
+    let maxMasterOrder = 0;
+    for (const el of layoutElements) {
+      if (el.order > maxMasterOrder) maxMasterOrder = el.order;
+    }
+    const layoutOrderOffset = layoutElements.length > 0 ? maxMasterOrder + 1 : 0;
+
     const layoutCtx = { ...ctx, slide: { ...ctx.slide, rels: ctx.layout.rels } };
     const layoutShapes = parseTemplateShapes(ctx.layout.spTree);
     for (let i = 0; i < layoutShapes.length; i++) {
       try {
-        layoutElements.push(await nodeToElement(layoutShapes[i], layoutCtx, i, files));
+        const el = await nodeToElement(layoutShapes[i], layoutCtx, i, files);
+        el.order += layoutOrderOffset;
+        layoutElements.push(el);
       } catch {
         // skip
       }
