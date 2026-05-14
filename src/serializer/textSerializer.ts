@@ -355,7 +355,10 @@ function mergeRunProps(target: MergedRunStyle, rPr: SafeXmlNode, ctx: RenderCont
   if (strike !== undefined && strike !== 'noStrike') target.strikethrough = true;
   if (strike === 'noStrike') target.strikethrough = false;
 
-  // Color from solidFill or gradFill child
+  // Color from solidFill or gradFill child.
+  // solidFill and gradFill are mutually exclusive fill types in OOXML.
+  // When a more specific level sets one, it must clear the other to prevent
+  // an inherited gradient from overriding an explicit solid color (or vice versa).
   const solidFill = rPr.child('solidFill');
   if (solidFill.exists()) {
     const { color, alpha } = resolveColor(solidFill, ctx);
@@ -366,11 +369,15 @@ function mergeRunProps(target: MergedRunStyle, rPr: SafeXmlNode, ctx: RenderCont
     } else {
       target.color = hex;
     }
+    target.textGradientCss = undefined;
   }
   const gradFill = rPr.child('gradFill');
   if (gradFill.exists()) {
     const css = resolveGradientForText(gradFill, ctx);
-    if (css) target.textGradientCss = css;
+    if (css) {
+      target.textGradientCss = css;
+      target.color = undefined;
+    }
   }
 
   // Font family
